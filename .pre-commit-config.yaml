@@ -102,15 +102,23 @@ repos:
         stages: [commit-msg]
         always_run: true
 
+      # Tree-wide spell check at pre-commit and pre-push. Scoped off
+      # the commit-msg stage so the cspell-commit hook below owns the
+      # commit buffer with worktree-safe config resolution.
       - id: cspell
         name: cspell
         entry: cspell --config .cspell.jsonc --no-summary --no-progress --no-must-find-files
         language: system
+        stages: [pre-commit, pre-push]
         types: [text]
 
+      # Commit-message spell check through the shared wrapper, which
+      # reads the buffer on a worktree-relative virtual path so cspell
+      # resolves this worktree's dictionary (see
+      # tools/cspell-commit-msg.sh).
       - id: cspell-commit
         name: cspell-commit
-        entry: cspell --config .cspell.jsonc --no-summary --no-progress --language-id commit-msg
+        entry: tools/cspell-commit-msg.sh
         language: system
         stages: [commit-msg]
-        types: [text]
+        always_run: true
