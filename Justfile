@@ -147,7 +147,7 @@ run *args:
 
 # Clean build artifacts
 clean:
-    rm -rf {{ bin_dir }} dist coverage.out coverage.html coverage.txt coverage.xml
+    rm -rf {{ bin_dir }} dist coverage.out coverage.html coverage.txt coverage.xml coverage.covdata*
 
 # --- Format ---
 
@@ -400,13 +400,37 @@ cover-html:
     go test -coverprofile=coverage.out ./...
     go tool cover -html=coverage.out
 
-# Emit a Cobertura XML report for downstream consumers (CI coverage
-# upload, Codecov, GitLab Pages reports). Cobertura is the lingua
-# franca format that most coverage dashboards accept, including the
-# `actions/upload-code-coverage` action a later workflow under
-# `.github/workflows/` invokes.
+# Emit a Cobertura XML report from one local text profile. Cobertura is
+# the lingua franca format coverage dashboards accept. This is the quick
+# local form; CI's per-slot and combined uploads flow through
+# `cover-binary` and `cover-merge` below.
 cover-cobertura:
     go test -coverprofile=coverage.out ./...
+    go tool gocover-cobertura < coverage.out > coverage.xml
+
+# Run tests, writing binary coverage data into [covdir], then render
+# that run's Cobertura XML to coverage.xml. CI uploads the binary covdir
+# per matrix slot so the downstream coverage job can merge the slots with
+# `go tool covdata merge` (see `cover-merge`) into one combined report —
+# a merge only the binary format supports losslessly. The covdir is
+# absolute because `go test` runs each package's binary from that
+# package's directory, which would scatter a relative path.
+cover-binary covdir="coverage.covdata":
+    rm -rf "{{ justfile_directory() }}/{{ covdir }}"
+    mkdir -p "{{ justfile_directory() }}/{{ covdir }}"
+    go test ./... -cover -args -test.gocoverdir="{{ justfile_directory() }}/{{ covdir }}"
+    go tool covdata textfmt -i="{{ justfile_directory() }}/{{ covdir }}" -o=coverage.out
+    go tool gocover-cobertura < coverage.out > coverage.xml
+
+# Merge the per-slot binary coverage dirs under [slotsdir] (one
+# subdirectory per slot) into a single profile and render the combined
+# Cobertura XML to coverage.xml. CI runs this in the downstream coverage
+# job after collecting every slot's uploaded covdata.
+cover-merge slotsdir="coverage.covdata.slots":
+    rm -rf coverage.covdata.merged
+    mkdir -p coverage.covdata.merged
+    go tool covdata merge -i="$(ls -d {{ slotsdir }}/*/ | paste -sd, -)" -o=coverage.covdata.merged
+    go tool covdata textfmt -i=coverage.covdata.merged -o=coverage.out
     go tool gocover-cobertura < coverage.out > coverage.xml
 
 # Run only the threshold gate against an existing coverage.out. The

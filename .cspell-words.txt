@@ -273,3 +273,8 @@ autostash
 codeql
 autobuild
 codeowners
+covdata
+covdir
+gocoverdir
+textfmt
+slotsdir
