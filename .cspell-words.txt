@@ -272,3 +272,4 @@ extensionless
 autostash
 codeql
 autobuild
+codeowners
