@@ -40,6 +40,11 @@ const (
 type Module struct {
 	Path    string
 	Version string
+	// Line records the 1-based vendor/modules.txt line carrying this
+	// module's "# <path> <version>" declaration. SARIF emission feeds
+	// it to the region start line so GitHub Code Scanning anchors each
+	// finding on the real file.
+	Line int
 }
 
 // Read returns the modules declared in modroot/vendor/modules.txt.
@@ -71,7 +76,9 @@ func Parse(r io.Reader) ([]Module, error) {
 	var mods []Module
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, scannerInitialBufSize), scannerMaxBufSize)
+	lineNo := 0
 	for scanner.Scan() {
+		lineNo++
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "# ") || strings.HasPrefix(line, "## ") {
 			continue
@@ -80,6 +87,7 @@ func Parse(r io.Reader) ([]Module, error) {
 		if !ok {
 			continue
 		}
+		mod.Line = lineNo
 		mods = append(mods, mod)
 	}
 	if err := scanner.Err(); err != nil {

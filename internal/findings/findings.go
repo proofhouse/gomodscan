@@ -19,9 +19,11 @@
 // value containing whitespace, an equals sign, or a literal quote.
 //
 // SARIF emission uses [github.com/owenrumney/go-sarif/v3] against
-// the v2.1.0 schema. Findings target Go module paths rather than
-// source files, so [AddResult] attaches each result to a logical
-// location whose Kind field carries the literal string module.
+// the v2.1.0 schema. Each result from [AddResult] carries a logical
+// location whose Kind field holds the literal string module (the
+// module path) alongside a physical location pointing at the vendor
+// manifest line, because GitHub Code Scanning rejects an upload
+// whose results lack a physical location.
 package findings
 
 import (
@@ -57,13 +59,33 @@ func NewRun(toolName string) *sarif.Run {
 	return sarif.NewRunWithInformationURI(toolName, infoURI)
 }
 
+// Location anchors a finding on a real file in the scanned repo.
+// GitHub Code Scanning rejects any result without a physical
+// location, so [AddResult] turns this into one. URI holds a
+// repo-root-relative path such as vendor/modules.txt, and Line gives
+// the 1-based line the finding sits on.
+type Location struct {
+	URI  string
+	Line int
+}
+
 // AddResult records one finding on run. The logical location uses
 // the "module" kind with module@version as both the name and the
-// fully qualified name; the partial fingerprint
+// fully qualified name. The supplied Location becomes the physical
+// location Code Scanning requires, mapping URI onto
+// artifactLocation.uri and Line onto region.startLine so the finding
+// anchors on a real file. The partial fingerprint
 // modulePathVersion/v1 carries the same identifier so downstream
 // consumers can dedupe across runs. Properties pass through to the
 // SARIF property bag verbatim.
-func AddResult(run *sarif.Run, ruleID string, level Level, message, module, version string, props map[string]string) {
+func AddResult(
+	run *sarif.Run,
+	ruleID string,
+	level Level,
+	message, module, version string,
+	loc Location,
+	props map[string]string,
+) {
 	id := fmt.Sprintf("%s@%s", module, version)
 
 	pb := sarif.NewPropertyBag()
@@ -75,12 +97,18 @@ func AddResult(run *sarif.Run, ruleID string, level Level, message, module, vers
 		WithLevel(string(level)).
 		WithMessage(sarif.NewTextMessage(message)).
 		AddLocation(
-			sarif.NewLocation().AddLogicalLocation(
-				sarif.NewLogicalLocation().
-					WithName(id).
-					WithFullyQualifiedName(id).
-					WithKind("module"),
-			),
+			sarif.NewLocation().
+				AddLogicalLocation(
+					sarif.NewLogicalLocation().
+						WithName(id).
+						WithFullyQualifiedName(id).
+						WithKind("module"),
+				).
+				WithPhysicalLocation(
+					sarif.NewPhysicalLocation().
+						WithArtifactLocation(sarif.NewSimpleArtifactLocation(loc.URI)).
+						WithRegion(sarif.NewRegion().WithStartLine(loc.Line)),
+				),
 		).
 		WithProperties(pb).
 		// WithPartialFingerprints initializes the underlying map;

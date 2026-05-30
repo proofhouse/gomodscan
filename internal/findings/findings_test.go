@@ -104,6 +104,7 @@ func TestWriteSARIF_EmitsValidV210Report(t *testing.T) {
 	findings.AddResult(run, "retracted", findings.LevelWarning,
 		"Module retracted at v1.0.0.",
 		"example.com/a", "v1.0.0",
+		findings.Location{URI: "vendor/modules.txt", Line: 7},
 		map[string]string{"reason": "checksum"},
 	)
 
@@ -130,6 +131,14 @@ func TestWriteSARIF_EmitsValidV210Report(t *testing.T) {
 					Text string `json:"text"`
 				} `json:"message"`
 				Locations []struct {
+					PhysicalLocation struct {
+						ArtifactLocation struct {
+							URI string `json:"uri"`
+						} `json:"artifactLocation"`
+						Region struct {
+							StartLine int `json:"startLine"`
+						} `json:"region"`
+					} `json:"physicalLocation"`
 					LogicalLocations []struct {
 						Name               string `json:"name"`
 						FullyQualifiedName string `json:"fullyQualifiedName"`
@@ -159,6 +168,9 @@ func TestWriteSARIF_EmitsValidV210Report(t *testing.T) {
 	assert.Equal(t, "warning", r.Level)
 	assert.Equal(t, "Module retracted at v1.0.0.", r.Message.Text)
 	require.Len(t, r.Locations, 1)
+	phys := r.Locations[0].PhysicalLocation
+	assert.Equal(t, "vendor/modules.txt", phys.ArtifactLocation.URI)
+	assert.Equal(t, 7, phys.Region.StartLine)
 	require.Len(t, r.Locations[0].LogicalLocations, 1)
 	loc := r.Locations[0].LogicalLocations[0]
 	assert.Equal(t, "example.com/a@v1.0.0", loc.Name)

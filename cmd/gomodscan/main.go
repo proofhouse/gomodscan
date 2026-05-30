@@ -45,6 +45,12 @@ import (
 const (
 	toolName = "gomodscan"
 
+	// vendorModulesPath names the repo-root-relative file each SARIF
+	// result points at. gomodscan reads it to list the vendored module
+	// set, the physical location GitHub Code Scanning anchors every
+	// finding on.
+	vendorModulesPath = "vendor/modules.txt"
+
 	// goEcosystem names the Go ecosystem in OSV requests.
 	goEcosystem = "Go"
 
@@ -91,6 +97,7 @@ type finding struct {
 	kind    findingKind
 	module  string
 	version string
+	line    int
 	latest  string
 	reason  string
 	id      string
@@ -273,7 +280,8 @@ func emitSARIF(out io.Writer, hits []finding) error {
 		WithDescription("Module appears in the OSV malicious-package registry").
 		WithHelpURI("https://github.com/ossf/malicious-packages")
 	for _, f := range hits {
-		findings.AddResult(run, string(f.kind), f.level(), f.message(), f.module, f.version, f.props())
+		findings.AddResult(run, string(f.kind), f.level(), f.message(), f.module, f.version,
+			findings.Location{URI: vendorModulesPath, Line: f.line}, f.props())
 	}
 	if err := findings.WriteSARIF(out, run); err != nil {
 		return fmt.Errorf("emit sarif: %w", err)
@@ -313,6 +321,7 @@ func collectDeprecated(mod vendormod.Module, versions []pkgsite.ModuleVersion) [
 				kind:    kindRetracted,
 				module:  mod.Path,
 				version: mod.Version,
+				line:    mod.Line,
 				reason:  v.RetractionReason,
 			})
 		}
@@ -321,6 +330,7 @@ func collectDeprecated(mod vendormod.Module, versions []pkgsite.ModuleVersion) [
 				kind:    kindDeprecated,
 				module:  mod.Path,
 				version: mod.Version,
+				line:    mod.Line,
 				latest:  latest,
 				reason:  v.DeprecationReason,
 			})
@@ -355,6 +365,7 @@ func collectMalicious(mod vendormod.Module, vulns []osv.Vulnerability) []finding
 			kind:    kindMalicious,
 			module:  mod.Path,
 			version: mod.Version,
+			line:    mod.Line,
 			id:      v.ID,
 			summary: v.Summary,
 		})
