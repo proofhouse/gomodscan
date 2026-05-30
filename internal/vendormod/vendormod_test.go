@@ -34,8 +34,8 @@ github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
 `,
 			want: []vendormod.Module{
-				{Path: "github.com/spf13/cobra", Version: "v1.10.2"},
-				{Path: "github.com/stretchr/testify", Version: "v1.11.1"},
+				{Path: "github.com/spf13/cobra", Version: "v1.10.2", Line: 1},
+				{Path: "github.com/stretchr/testify", Version: "v1.11.1", Line: 4},
 			},
 		},
 		{
@@ -45,7 +45,7 @@ github.com/stretchr/testify/require
 example.com/old
 `,
 			want: []vendormod.Module{
-				{Path: "example.com/new", Version: "v1.2.3"},
+				{Path: "example.com/new", Version: "v1.2.3", Line: 1},
 			},
 		},
 		{
@@ -57,7 +57,7 @@ example.com/local
 github.com/keep/me
 `,
 			want: []vendormod.Module{
-				{Path: "github.com/keep/me", Version: "v1.0.0"},
+				{Path: "github.com/keep/me", Version: "v1.0.0", Line: 4},
 			},
 		},
 		{
@@ -73,7 +73,7 @@ github.com/a/b
 github.com/a/b/sub
 random non-header line
 `,
-			want: []vendormod.Module{{Path: "github.com/a/b", Version: "v0.1.0"}},
+			want: []vendormod.Module{{Path: "github.com/a/b", Version: "v0.1.0", Line: 1}},
 		},
 		{
 			name: "three-field replace without version drops the entry",
@@ -106,7 +106,7 @@ loner
 example.com/old
 `,
 			want: []vendormod.Module{
-				{Path: "example.com/new", Version: "v9.9.9"},
+				{Path: "example.com/new", Version: "v9.9.9", Line: 1},
 			},
 		},
 		{
@@ -116,7 +116,7 @@ example.com/old
 example.com/old
 `,
 			want: []vendormod.Module{
-				{Path: "example.com/new", Version: "v9.9.9"},
+				{Path: "example.com/new", Version: "v9.9.9", Line: 1},
 			},
 		},
 		{
@@ -126,7 +126,7 @@ example.com/old
 example.com/exact
 `,
 			want: []vendormod.Module{
-				{Path: "example.com/exact", Version: "v0.0.1"},
+				{Path: "example.com/exact", Version: "v0.0.1", Line: 1},
 			},
 		},
 	}
@@ -169,7 +169,7 @@ func TestRead(t *testing.T) {
 		got, err := vendormod.Read(dir)
 		require.NoError(t, err)
 		assert.Equal(t, []vendormod.Module{
-			{Path: "github.com/keep/me", Version: "v1.2.3"},
+			{Path: "github.com/keep/me", Version: "v1.2.3", Line: 1},
 		}, got)
 	})
 

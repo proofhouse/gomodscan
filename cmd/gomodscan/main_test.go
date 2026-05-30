@@ -186,12 +186,19 @@ func TestEmitSARIF_RegistersAllRulesAndEmitsResults(t *testing.T) {
 	t.Parallel()
 
 	hits := []finding{
-		{kind: kindRetracted, module: "example.com/a", version: "v1.0.0", reason: "checksum"},
+		{kind: kindRetracted, module: "example.com/a", version: "v1.0.0", line: 10, reason: "checksum"},
 		{
-			kind: kindDeprecated, module: "example.com/b", version: "v0.1.0",
+			kind: kindDeprecated, module: "example.com/b", version: "v0.1.0", line: 14,
 			latest: "v0.2.0", reason: "use v0.2.0",
 		},
-		{kind: kindMalicious, module: "example.com/c", version: "v2.0.0", id: "MAL-2025-0001", summary: "Backdoor"},
+		{
+			kind:    kindMalicious,
+			module:  "example.com/c",
+			version: "v2.0.0",
+			line:    18,
+			id:      "MAL-2025-0001",
+			summary: "Backdoor",
+		},
 	}
 
 	var buf bytes.Buffer
@@ -209,6 +216,13 @@ func TestEmitSARIF_RegistersAllRulesAndEmitsResults(t *testing.T) {
 	assert.Contains(t, out, `"name": "example.com/c@v2.0.0"`)
 	assert.Contains(t, out, `"latest": "v0.2.0"`)
 	assert.Contains(t, out, `"id": "MAL-2025-0001"`)
+	// Every result carries the vendor manifest as its physical
+	// location, with the module's line threaded onto the region so
+	// Code Scanning anchors each finding on the real file.
+	assert.Contains(t, out, `"uri": "vendor/modules.txt"`)
+	assert.Contains(t, out, `"startLine": 10`)
+	assert.Contains(t, out, `"startLine": 14`)
+	assert.Contains(t, out, `"startLine": 18`)
 }
 
 func TestEmitFindings_UnknownFormatErrors(t *testing.T) {
@@ -221,7 +235,7 @@ func TestEmitFindings_UnknownFormatErrors(t *testing.T) {
 func TestCollectDeprecated(t *testing.T) {
 	t.Parallel()
 
-	mod := vendormod.Module{Path: "example.com/m", Version: "v1.2.3"}
+	mod := vendormod.Module{Path: "example.com/m", Version: "v1.2.3", Line: 5}
 
 	t.Run("empty version list yields no hits", func(t *testing.T) {
 		t.Parallel()
@@ -292,13 +306,16 @@ func TestCollectDeprecated(t *testing.T) {
 		// Order tracks the version slice: deprecated entry comes first.
 		assert.Equal(t, kindDeprecated, got[0].kind)
 		assert.Equal(t, kindRetracted, got[1].kind)
+		// Both findings carry the module's manifest line.
+		assert.Equal(t, mod.Line, got[0].line)
+		assert.Equal(t, mod.Line, got[1].line)
 	})
 }
 
 func TestCollectMalicious(t *testing.T) {
 	t.Parallel()
 
-	mod := vendormod.Module{Path: "example.com/mixed", Version: "v0.5.0"}
+	mod := vendormod.Module{Path: "example.com/mixed", Version: "v0.5.0", Line: 3}
 	cases := []struct {
 		name    string
 		vulns   []osv.Vulnerability
@@ -339,6 +356,7 @@ func TestCollectMalicious(t *testing.T) {
 				assert.Equal(t, kindMalicious, got[i].kind)
 				assert.Equal(t, mod.Path, got[i].module)
 				assert.Equal(t, mod.Version, got[i].version)
+				assert.Equal(t, mod.Line, got[i].line)
 			}
 		})
 	}
