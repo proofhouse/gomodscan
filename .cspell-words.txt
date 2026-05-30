@@ -270,3 +270,5 @@ getset
 AGENTMSG
 extensionless
 autostash
+codeql
+autobuild
