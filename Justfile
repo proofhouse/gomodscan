@@ -443,6 +443,14 @@ cover-check:
 vuln:
     go tool govulncheck ./...
 
+# Emit the govulncheck results as SARIF to <file> for the security.yml
+# Code Scanning upload. govulncheck exits 0 in SARIF mode whether or not
+# it finds vulnerabilities — the report carries them — so this recipe
+# surfaces findings through Code Scanning rather than failing the run,
+# while a genuine scanner failure still exits non-zero.
+vuln-sarif file:
+    go tool govulncheck -format sarif ./... > "{{ file }}"
+
 # Scan the working tree and the full git history for committed
 # secrets via gitleaks. `gitleaks git` walks every commit's diff
 # against the bundled regular-expression and entropy rule set;
@@ -464,6 +472,17 @@ gitleaks:
 # first when vendor/modules.txt is stale.
 scan:
     go run ./cmd/gomodscan
+
+# Emit the gomodscan findings as SARIF to <file> for the security.yml
+# Code Scanning upload. Unlike the scan gate recipe, a findings exit (1)
+# does not fail this recipe — Code Scanning surfaces severity downstream
+# — but a tool failure (exit 2) still propagates.
+scan-sarif file:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    go run ./cmd/gomodscan -format sarif > "{{ file }}"
+    rc=$?
+    if [ "$rc" -gt 1 ]; then exit "$rc"; fi
 
 # --- Dependencies ---
 
