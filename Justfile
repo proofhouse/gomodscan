@@ -304,7 +304,7 @@ lint-workflows:
 # COMMIT_AGENTMSG`.
 lint-commit-msg:
     tools/vale-commit-msg.sh COMMIT_AGENTMSG
-    cspell --config .cspell.jsonc --no-summary --no-progress --language-id commit-msg COMMIT_AGENTMSG
+    tools/cspell-commit-msg.sh COMMIT_AGENTMSG
     go tool commitlint lint --message COMMIT_AGENTMSG
     go run ./tools/commit-trailers --message COMMIT_AGENTMSG
 
