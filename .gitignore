@@ -17,6 +17,7 @@ coverage.out
 coverage.html
 coverage.txt
 coverage.xml
+coverage.covdata*/
 
 # Test outputs
 testdata/fuzz/
