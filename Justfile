@@ -1,6 +1,14 @@
 set unstable := true
 set positional-arguments := true
 
+# Run [script] recipes under bash rather than the default sh. On Linux
+# sh is dash, which lacks [[ ]], <<<, and set -o pipefail — constructs
+# the [script] recipes below rely on. Under dash the deadcode and
+# modernize gates silently no-op: their [[ test errors inside an if, so
+# set -e never trips and the failure branch is skipped. macOS sh is
+# bash, which is why the breakage stays hidden until CI runs on Linux.
+set script-interpreter := ['bash', '-eu']
+
 # Go project metadata
 
 module := "github.com/proofhouse/gomodscan"
@@ -360,40 +368,16 @@ mutate *args:
 mutate-all:
     go tool gremlins unleash --timeout-coefficient {{ gremlins_timeout_coefficient }} .
 
-# Fuzz time budget per target. The nightly fuzz workflow under
-# `.github/workflows/` overrides this to several minutes per target
-# so corpus growth happens off the critical path. The local default
-# keeps a full inner-loop sweep over today's target set under a
-# minute so a contributor can run the recipe before pushing.
-fuzz_time := env("FUZZ_TIME", "30s")
-
-# Run native Go fuzz targets under [path] (default the entire
-# module). `go test -fuzz` takes one target regular expression per
-# invocation, so this recipe lists every Fuzz* function under each
-# package below [path] and runs them one at a time for the
-# {{ fuzz_time }} budget. Seed-corpus failures fail the recipe and
-# new crashers land under each package's `testdata/fuzz/`. A
-# nightly workflow under `.github/workflows/` invokes this same
-# recipe with a longer FUZZ_TIME, mirroring the gremlins /
-# mutate-all shape where one recipe powers both the inner loop and
-# the scheduled sweep.
-[script]
+# Run native Go fuzz targets under [path] (default the entire module)
+# via tools/fuzz.sh. The script lists every Fuzz* function under each
+# package and runs it for the FUZZ_TIME budget (default 30s); set
+# FUZZ_TIME to widen the sweep, e.g. `FUZZ_TIME=5m just fuzz`. The
+# nightly workflow under `.github/workflows/` calls the same script
+# with a longer FUZZ_TIME, mirroring the gremlins / mutate-all shape
+# where one entry point powers both the inner loop and the scheduled
+# sweep.
 fuzz path="./...":
-    set -euo pipefail
-    found=0
-    for pkg in $(go list {{ path }}); do
-        targets=$(go test -list '^Fuzz' "$pkg" 2>/dev/null | grep -E '^Fuzz' || true)
-        [[ -z "$targets" ]] && continue
-        while IFS= read -r target; do
-            echo "==> $pkg $target"
-            go test -run='^$' -fuzz="^${target}$" -fuzztime={{ fuzz_time }} "$pkg"
-            found=$((found+1))
-        done <<< "$targets"
-    done
-    if (( found == 0 )); then
-        echo "no fuzz targets discovered under {{ path }}" >&2
-        exit 1
-    fi
+    tools/fuzz.sh {{ path }}
 
 # Run tests with coverage, print the per-function breakdown, and
 # enforce the project thresholds documented in `.testcoverage.yml`.
