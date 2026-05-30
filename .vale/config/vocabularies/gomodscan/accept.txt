@@ -210,3 +210,5 @@ collectDeprecated
 collectMalicious
 evaluateDeprecated
 evaluateMalicious
+CodeQL
+autobuild
