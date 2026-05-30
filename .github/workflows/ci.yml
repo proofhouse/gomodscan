@@ -1,0 +1,147 @@
+---
+# Main quality gate. Runs the Go-flavored lint set, the test suite
+# (matrixed across linux/macOS/windows native runners with the race
+# detector enabled in every slot), govulncheck, and the vendor-drift
+# check on every pull request and every push to `main`. Each gate
+# runs as its own job so a flake in one block does not require
+# rerunning the others and the PR status surfaces which gate fired.
+# The non-Go lint set (vale, cspell, rumdl, biome, yamllint) lands
+# in follow-up workflows that handle each tool's distinct install
+# path.
+#
+# Every job installs `just` from a SHA-pinned casey/just release
+# tarball, verifies the bundled SHA256SUMS, and then invokes the
+# matching `just <recipe>` so the recipe is the single source of
+# truth for what the gate runs. The local `just check` and
+# `just check-all` aggregators stay in lockstep with this workflow.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint-go:
+    name: lint-go
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          check-latest: false
+
+      - name: Set up just
+        uses: ./.github/actions/setup-just
+
+      - name: Run Go-flavored lints
+        run: just lint-go-all
+
+  test:
+    name: "test (${{ matrix.os }})"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - macos-15
+          - windows-2025
+    steps:
+      - name: Harden the runner
+        if: runner.os == 'Linux'
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          check-latest: false
+
+      - name: Set up just
+        uses: ./.github/actions/setup-just
+
+      - name: Run tests
+        run: just test
+
+      - name: Run tests with race detector
+        run: just test-race
+
+  vuln:
+    name: vuln
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          check-latest: false
+
+      - name: Set up just
+        uses: ./.github/actions/setup-just
+
+      - name: Run govulncheck
+        run: just vuln
+
+  vendor-check:
+    name: vendor-check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          check-latest: false
+
+      - name: Set up just
+        uses: ./.github/actions/setup-just
+
+      - name: Check vendor drift
+        run: just vendor-check
