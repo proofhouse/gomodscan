@@ -279,3 +279,6 @@ covdir
 gocoverdir
 textfmt
 slotsdir
+failsafehttp
+retrypolicy
+synctest

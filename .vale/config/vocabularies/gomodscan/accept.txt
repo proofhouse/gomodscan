@@ -212,3 +212,17 @@ evaluateDeprecated
 evaluateMalicious
 CodeQL
 autobuild
+[Bb]ackoff
+[Rr]etryable
+[Uu]nexported
+[Ff]ailsafe
+failsafehttp
+retrypolicy
+synctest
+fetchPage
+fakeResponse
+roundTripperFunc
+retryClient
+newRetryTransport
+NewRetryTransport
+bodyclose
