@@ -16,11 +16,6 @@ threshold:
 
 exclude:
   paths:
-    # Binary entry points hold os.Args parsing and os.Exit glue that
-    # can't run from a go test process. cmd/gomodscan splits that glue
-    # into a testable realMain helper and stays in the profile;
-    # commit-trailers keeps its imperative main here.
-    - ^tools/commit-trailers/main\.go$
     # exitcode declares three integer constants and nothing else.
     # No executable lines to cover.
     - ^internal/exitcode/
