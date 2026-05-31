@@ -5,6 +5,7 @@ go 1.26
 toolchain go1.26.3
 
 require (
+	github.com/failsafe-go/failsafe-go v0.9.6
 	github.com/owenrumney/go-sarif/v3 v3.3.0
 	github.com/stretchr/testify v1.11.1
 )
@@ -14,6 +15,7 @@ require (
 	github.com/alexflint/go-arg v1.6.0 // indirect
 	github.com/alexflint/go-scalar v1.2.0 // indirect
 	github.com/aws/aws-sdk-go v1.49.4 // indirect
+	github.com/bits-and-blooms/bitset v1.24.4 // indirect
 	github.com/bluekeyes/go-gitdiff v0.8.1 // indirect
 	github.com/boumenot/gocover-cobertura v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -27,6 +29,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hako/durafmt v0.0.0-20210608085754-5c1018a4e16b // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/influxdata/tdigest v0.0.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

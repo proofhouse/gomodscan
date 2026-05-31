@@ -6,10 +6,13 @@ package pkgsite_test
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -156,6 +159,11 @@ func TestVersions(t *testing.T) {
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				http.Error(w, "boom", http.StatusInternalServerError)
 			},
+			// The default client retries 5xx; inject a plain client so
+			// this case exercises the status-to-error mapping in a single
+			// shot. The TestRetryTransport_* tests below cover the retry
+			// behavior itself.
+			clientOpts: func(c *pkgsite.Client) { c.HTTPClient = &http.Client{} },
 			wantErr:    []error{pkgsite.ErrUnexpectedStatus},
 			notWantErr: []error{pkgsite.ErrNotFound},
 		},
@@ -245,4 +253,185 @@ func TestVersions_ContextCancelled(t *testing.T) {
 		errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "context deadline"),
 		"expected deadline-exceeded, got %v", err,
 	)
+}
+
+// The retry tests below drive the failsafe-go retry/backoff policy
+// through the public Versions call, inside a testing/synctest bubble with
+// an in-memory transport. The bubble's fake clock advances every backoff
+// or Retry-After wait instantly, so the tests reuse the real production
+// timing constants yet finish in microseconds and stay deterministic.
+// The export_test.go shim reaches the unexported transport builder.
+
+const retryOKBody = `{"items":[{"modulePath":"example.com/m","version":"v1.0.0","latestVersion":"v1.0.0"}],"total":1}`
+
+// roundTripperFunc adapts a function to an http.RoundTripper, standing in
+// for the network so the retry policy runs under a fake clock with no
+// real I/O. (synctest doesn't advance time across real network blocks.)
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// fakeResponse builds a minimal *http.Response for the in-memory transport.
+func fakeResponse(req *http.Request, status int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Status:     http.StatusText(status),
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Request:    req,
+	}
+}
+
+// retryClient builds a Client whose transport applies the production
+// retry/backoff policy around a counting in-memory transport. It invokes
+// respond once per attempt with the 1-based attempt number, and the
+// returned counter records how many attempts reached the transport.
+func retryClient(
+	attemptTimeout time.Duration,
+	respond func(attempt int32, req *http.Request) (*http.Response, error),
+) (*pkgsite.Client, *atomic.Int32) {
+	var count atomic.Int32
+	inner := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		return respond(count.Add(1), req)
+	})
+	c := &pkgsite.Client{
+		BaseURL: "http://example.test",
+		HTTPClient: &http.Client{
+			Transport: pkgsite.NewRetryTransport(
+				inner, pkgsite.RetryInitialDelay, pkgsite.RetryMaxDelay, attemptTimeout,
+			),
+		},
+	}
+	return c, &count
+}
+
+func TestRetryTransport_RetriesServerErrorThenSucceeds(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c, count := retryClient(pkgsite.RetryAttemptTimeout,
+			func(attempt int32, req *http.Request) (*http.Response, error) {
+				if attempt <= pkgsite.RetryMaxRetries {
+					return fakeResponse(req, http.StatusInternalServerError, "boom"), nil
+				}
+				return fakeResponse(req, http.StatusOK, retryOKBody), nil
+			})
+
+		got, err := c.Versions(t.Context(), "example.com/m")
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		assert.Equal(t, int32(pkgsite.RetryMaxRetries+1), count.Load(), "should retry until the success response")
+	})
+}
+
+func TestRetryTransport_ExhaustsRetriesOnPersistentServerError(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c, count := retryClient(pkgsite.RetryAttemptTimeout,
+			func(_ int32, req *http.Request) (*http.Response, error) {
+				return fakeResponse(req, http.StatusServiceUnavailable, "still broken"), nil
+			})
+
+		_, err := c.Versions(t.Context(), "example.com/m")
+		// ReturnLastFailure lets the final 503 flow through the status
+		// switch instead of a retrypolicy.ExceededError wrapper.
+		require.ErrorIs(t, err, pkgsite.ErrUnexpectedStatus)
+		assert.Equal(
+			t,
+			int32(pkgsite.RetryMaxRetries+1),
+			count.Load(),
+			"should attempt the initial request plus every retry",
+		)
+	})
+}
+
+// TestRetryTransport_RetriesTooManyRequests covers both shapes of 429
+// pkg.go.dev returns: one carrying a Retry-After header and a bare
+// text/html one without it (golang/go#78590 caught the two back-to-back).
+// The fake clock lets each case assert the delay that distinguishes the
+// Retry-After path from the backoff fallback. The bare case also confirms
+// a non-JSON 429 body doesn't break the eventual success decode.
+func TestRetryTransport_RetriesTooManyRequests(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		setHeader  func(r *http.Response)
+		minElapsed time.Duration // asserted when > 0
+		maxElapsed time.Duration // asserted when > 0
+	}{
+		{
+			name:       "honors Retry-After header",
+			setHeader:  func(r *http.Response) { r.Header.Set("Retry-After", "30") },
+			minElapsed: 20 * time.Second, // 30 s Retry-After, minus jitter
+		},
+		{
+			name:       "falls back to backoff without Retry-After",
+			setHeader:  func(r *http.Response) { r.Header.Set("Content-Type", "text/html") },
+			maxElapsed: 5 * time.Second, // ~1 s initial backoff, not tens of seconds
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				c, count := retryClient(pkgsite.RetryAttemptTimeout,
+					func(attempt int32, req *http.Request) (*http.Response, error) {
+						if attempt == 1 {
+							r := fakeResponse(req, http.StatusTooManyRequests, "rate exceeded")
+							tc.setHeader(r)
+							return r, nil
+						}
+						return fakeResponse(req, http.StatusOK, retryOKBody), nil
+					})
+
+				start := time.Now()
+				got, err := c.Versions(t.Context(), "example.com/m")
+				require.NoError(t, err)
+				require.Len(t, got, 1)
+				assert.Equal(t, int32(2), count.Load())
+				if tc.minElapsed > 0 {
+					assert.GreaterOrEqual(t, time.Since(start), tc.minElapsed)
+				}
+				if tc.maxElapsed > 0 {
+					assert.Less(t, time.Since(start), tc.maxElapsed)
+				}
+			})
+		})
+	}
+}
+
+func TestRetryTransport_DoesNotRetryNotFound(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c, count := retryClient(pkgsite.RetryAttemptTimeout,
+			func(_ int32, req *http.Request) (*http.Response, error) {
+				return fakeResponse(req, http.StatusNotFound, "not found"), nil
+			})
+
+		_, err := c.Versions(t.Context(), "example.com/private")
+		require.ErrorIs(t, err, pkgsite.ErrNotFound)
+		assert.Equal(t, int32(1), count.Load(), "404 is terminal and must not be retried")
+	})
+}
+
+func TestRetryTransport_RetriesPerAttemptTimeout(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		const attemptTimeout = time.Second
+		c, count := retryClient(attemptTimeout,
+			func(_ int32, req *http.Request) (*http.Response, error) {
+				// Block past the per-attempt timeout on the fake clock, but
+				// unblock promptly once the timeout cancels the attempt's
+				// context, so no goroutine leaks out of the bubble.
+				select {
+				case <-time.After(2 * attemptTimeout):
+					return fakeResponse(req, http.StatusOK, retryOKBody), nil
+				case <-req.Context().Done():
+					return nil, req.Context().Err()
+				}
+			})
+
+		_, err := c.Versions(t.Context(), "example.com/slow")
+		require.Error(t, err)
+		assert.Equal(t, int32(pkgsite.RetryMaxRetries+1), count.Load(), "each timed-out attempt should be retried")
+	})
 }
