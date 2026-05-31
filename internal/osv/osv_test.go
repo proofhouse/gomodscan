@@ -7,16 +7,20 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/proofhouse/gomodscan/internal/osv"
+	"github.com/proofhouse/gomodscan/internal/retryhttp"
 )
 
 // mustWrite writes body to w and records any error against t.
@@ -144,7 +148,11 @@ func TestQuery(t *testing.T) {
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				http.Error(w, "boom", http.StatusInternalServerError)
 			},
-			wantErr: []error{osv.ErrUnexpectedStatus},
+			// The default client retries 5xx; inject a plain client so this
+			// case exercises the status-to-error mapping in a single shot. The
+			// TestQuery_Retries* tests below cover the retry behavior itself.
+			clientOpts: func(c *osv.Client) { c.HTTPClient = &http.Client{} },
+			wantErr:    []error{osv.ErrUnexpectedStatus},
 		},
 		{
 			name:    "malformed JSON surfaces as a decode error",
@@ -235,4 +243,106 @@ func TestQuery_ContextCancelled(t *testing.T) {
 		errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "context deadline"),
 		"expected deadline-exceeded, got %v", err,
 	)
+}
+
+// The retry tests below drive the failsafe-go retry/backoff policy through the
+// public Query call, inside a testing/synctest bubble with an in-memory
+// transport. The bubble's fake clock advances every backoff wait instantly, so
+// the tests reuse the real production timing constants yet finish in
+// microseconds and stay deterministic. The retryhttp package tests cover
+// the transport's own behavior (Retry-After handling, per-attempt timeout,
+// jitter); these confirm Query composes with the shared transport and maps
+// a persistent failure onto ErrUnexpectedStatus.
+
+const retryVulnsBody = `{"vulns":[{"id":"MAL-2025-0001","summary":"Malicious code"}]}`
+
+// roundTripperFunc adapts a function to an http.RoundTripper, standing in for
+// the network so the retry policy runs under a fake clock with no real I/O.
+// (synctest doesn't advance time across real network blocks.)
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// fakeResponse builds a minimal *http.Response for the in-memory transport.
+func fakeResponse(req *http.Request, status int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Status:     http.StatusText(status),
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Request:    req,
+	}
+}
+
+// retryClient builds a Client whose transport applies the production
+// retry/backoff policy around a counting in-memory transport. It invokes
+// respond once per attempt with the 1-based attempt number, and the returned
+// counter records how many attempts reached the transport.
+func retryClient(
+	respond func(attempt int32, req *http.Request) (*http.Response, error),
+) (*osv.Client, *atomic.Int32) {
+	var count atomic.Int32
+	inner := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		return respond(count.Add(1), req)
+	})
+	c := &osv.Client{
+		BaseURL: "http://example.test",
+		HTTPClient: &http.Client{
+			Transport: retryhttp.NewTransport(
+				inner, retryhttp.InitialDelay, retryhttp.MaxDelay, retryhttp.AttemptTimeout,
+			),
+		},
+	}
+	return c, &count
+}
+
+func TestQuery_RetriesServerErrorThenSucceeds(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c, count := retryClient(func(attempt int32, req *http.Request) (*http.Response, error) {
+			if attempt <= retryhttp.MaxRetries {
+				return fakeResponse(req, http.StatusInternalServerError, "boom"), nil
+			}
+			return fakeResponse(req, http.StatusOK, retryVulnsBody), nil
+		})
+
+		got, err := c.Query(t.Context(), osv.Package{Name: "example.com/m", Ecosystem: "Go"}, "v1.0.0")
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		assert.Equal(t, "MAL-2025-0001", got[0].ID)
+		assert.Equal(t, int32(retryhttp.MaxRetries+1), count.Load(), "should retry until the success response")
+	})
+}
+
+func TestQuery_ExhaustsRetriesOnPersistentServerError(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c, count := retryClient(func(_ int32, req *http.Request) (*http.Response, error) {
+			return fakeResponse(req, http.StatusServiceUnavailable, "still broken"), nil
+		})
+
+		_, err := c.Query(t.Context(), osv.Package{Name: "example.com/m", Ecosystem: "Go"}, "v1.0.0")
+		// ReturnLastFailure lets the final 503 flow through the status switch
+		// instead of a retrypolicy.ExceededError wrapper.
+		require.ErrorIs(t, err, osv.ErrUnexpectedStatus)
+		assert.Equal(
+			t,
+			int32(retryhttp.MaxRetries+1),
+			count.Load(),
+			"should attempt the initial request plus every retry",
+		)
+	})
+}
+
+func TestQuery_DoesNotRetryTerminalStatus(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		c, count := retryClient(func(_ int32, req *http.Request) (*http.Response, error) {
+			return fakeResponse(req, http.StatusBadRequest, "bad request"), nil
+		})
+
+		_, err := c.Query(t.Context(), osv.Package{Name: "example.com/m", Ecosystem: "Go"}, "v1.0.0")
+		require.ErrorIs(t, err, osv.ErrUnexpectedStatus)
+		assert.Equal(t, int32(1), count.Load(), "a terminal 4xx must not be retried")
+	})
 }

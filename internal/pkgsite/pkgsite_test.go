@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/proofhouse/gomodscan/internal/pkgsite"
+	"github.com/proofhouse/gomodscan/internal/retryhttp"
 )
 
 // mustWrite writes body to w and records any error against t.
@@ -297,8 +298,8 @@ func retryClient(
 	c := &pkgsite.Client{
 		BaseURL: "http://example.test",
 		HTTPClient: &http.Client{
-			Transport: pkgsite.NewRetryTransport(
-				inner, pkgsite.RetryInitialDelay, pkgsite.RetryMaxDelay, attemptTimeout,
+			Transport: retryhttp.NewTransport(
+				inner, retryhttp.InitialDelay, retryhttp.MaxDelay, attemptTimeout,
 			),
 		},
 	}
@@ -308,9 +309,9 @@ func retryClient(
 func TestRetryTransport_RetriesServerErrorThenSucceeds(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		c, count := retryClient(pkgsite.RetryAttemptTimeout,
+		c, count := retryClient(retryhttp.AttemptTimeout,
 			func(attempt int32, req *http.Request) (*http.Response, error) {
-				if attempt <= pkgsite.RetryMaxRetries {
+				if attempt <= retryhttp.MaxRetries {
 					return fakeResponse(req, http.StatusInternalServerError, "boom"), nil
 				}
 				return fakeResponse(req, http.StatusOK, retryOKBody), nil
@@ -319,14 +320,14 @@ func TestRetryTransport_RetriesServerErrorThenSucceeds(t *testing.T) {
 		got, err := c.Versions(t.Context(), "example.com/m")
 		require.NoError(t, err)
 		require.Len(t, got, 1)
-		assert.Equal(t, int32(pkgsite.RetryMaxRetries+1), count.Load(), "should retry until the success response")
+		assert.Equal(t, int32(retryhttp.MaxRetries+1), count.Load(), "should retry until the success response")
 	})
 }
 
 func TestRetryTransport_ExhaustsRetriesOnPersistentServerError(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		c, count := retryClient(pkgsite.RetryAttemptTimeout,
+		c, count := retryClient(retryhttp.AttemptTimeout,
 			func(_ int32, req *http.Request) (*http.Response, error) {
 				return fakeResponse(req, http.StatusServiceUnavailable, "still broken"), nil
 			})
@@ -337,7 +338,7 @@ func TestRetryTransport_ExhaustsRetriesOnPersistentServerError(t *testing.T) {
 		require.ErrorIs(t, err, pkgsite.ErrUnexpectedStatus)
 		assert.Equal(
 			t,
-			int32(pkgsite.RetryMaxRetries+1),
+			int32(retryhttp.MaxRetries+1),
 			count.Load(),
 			"should attempt the initial request plus every retry",
 		)
@@ -373,7 +374,7 @@ func TestRetryTransport_RetriesTooManyRequests(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			synctest.Test(t, func(t *testing.T) {
-				c, count := retryClient(pkgsite.RetryAttemptTimeout,
+				c, count := retryClient(retryhttp.AttemptTimeout,
 					func(attempt int32, req *http.Request) (*http.Response, error) {
 						if attempt == 1 {
 							r := fakeResponse(req, http.StatusTooManyRequests, "rate exceeded")
@@ -402,7 +403,7 @@ func TestRetryTransport_RetriesTooManyRequests(t *testing.T) {
 func TestRetryTransport_DoesNotRetryNotFound(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		c, count := retryClient(pkgsite.RetryAttemptTimeout,
+		c, count := retryClient(retryhttp.AttemptTimeout,
 			func(_ int32, req *http.Request) (*http.Response, error) {
 				return fakeResponse(req, http.StatusNotFound, "not found"), nil
 			})
@@ -432,6 +433,6 @@ func TestRetryTransport_RetriesPerAttemptTimeout(t *testing.T) {
 
 		_, err := c.Versions(t.Context(), "example.com/slow")
 		require.Error(t, err)
-		assert.Equal(t, int32(pkgsite.RetryMaxRetries+1), count.Load(), "each timed-out attempt should be retried")
+		assert.Equal(t, int32(retryhttp.MaxRetries+1), count.Load(), "each timed-out attempt should be retried")
 	})
 }

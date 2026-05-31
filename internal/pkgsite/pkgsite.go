@@ -28,8 +28,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/failsafe-go/failsafe-go/failsafehttp"
-	"github.com/failsafe-go/failsafe-go/timeout"
+	"github.com/proofhouse/gomodscan/internal/retryhttp"
 )
 
 const (
@@ -47,31 +46,6 @@ const (
 	// own ceiling. This value bounds the response size for modules
 	// with hundreds of tagged versions.
 	defaultPageLimit = 200
-
-	// defaultTimeout caps a single HTTP attempt. The retry transport
-	// composes this timeout inside the retry policy, so each attempt
-	// gets its own deadline and a long Retry-After wait between attempts
-	// survives intact. The value matches the per-request budget the
-	// reference pkgsite-cli uses.
-	defaultTimeout = 30 * time.Second
-
-	// retryMaxRetries bounds how many times the transport re-issues a
-	// request after a retryable response (429 or most 5xx) or a
-	// transient network error. Two keeps the worst-case per-module wait
-	// modest when pkg.go.dev throttles the whole host.
-	retryMaxRetries = 2
-
-	// retryInitialDelay and retryMaxDelay bound the exponential backoff
-	// the transport applies after a 429 arrives without a Retry-After
-	// header, which pkg.go.dev sends inconsistently. With the header
-	// present, the transport honors it instead. The ceiling matches the
-	// Retry-After value pkg.go.dev returns when it does send one.
-	retryInitialDelay = 1 * time.Second
-	retryMaxDelay     = 30 * time.Second
-
-	// retryJitterFactor randomizes each backoff delay so a batch of
-	// module lookups doesn't retry in lockstep.
-	retryJitterFactor = 0.25
 )
 
 // ErrNotFound reports that pkg.go.dev doesn't recognize the module.
@@ -93,37 +67,9 @@ var ErrUnexpectedStatus = errors.New("unexpected status from pkg.go.dev")
 //
 //nolint:gochecknoglobals // intentional process-wide singleton for connection pooling.
 var defaultHTTPClient = &http.Client{
-	Transport: newRetryTransport(http.DefaultTransport, retryInitialDelay, retryMaxDelay, defaultTimeout),
-}
-
-// newRetryTransport wraps inner with a per-attempt timeout plus
-// retry/backoff. failsafehttp.NewRetryPolicyBuilder already retries the
-// responses worth a second look (a 429 or most 5xx) along with transient
-// network errors, and honors a Retry-After header. On top, this adds
-// exponential backoff for the no-header case plus a jitter factor, and
-// caps the attempts. Composing the timeout policy inside the retry policy
-// bounds each attempt rather than the whole sequence. Callers pass the
-// durations, so tests drive the policy with their own timing.
-//
-// ReturnLastFailure keeps retries transparent: once the policy runs out
-// of attempts, the transport returns the final response (or error)
-// directly rather than a retrypolicy.ExceededError wrapper, so the status
-// switch in fetchPage still maps a persistent 429 or 5xx onto
-// ErrUnexpectedStatus.
-func newRetryTransport(
-	inner http.RoundTripper,
-	initialDelay, maxDelay, attemptTimeout time.Duration,
-) http.RoundTripper {
-	//nolint:bodyclose // failsafe policies use *http.Response generics that confuse bodyclose; nothing to close.
-	retryPolicy := failsafehttp.NewRetryPolicyBuilder().
-		WithBackoff(initialDelay, maxDelay).
-		WithJitterFactor(retryJitterFactor).
-		WithMaxRetries(retryMaxRetries).
-		ReturnLastFailure().
-		Build()
-	//nolint:bodyclose // same generics issue as the retry policy; nothing to close.
-	attemptDeadline := timeout.New[*http.Response](attemptTimeout)
-	return failsafehttp.NewRoundTripper(inner, retryPolicy, attemptDeadline)
+	Transport: retryhttp.NewTransport(
+		http.DefaultTransport, retryhttp.InitialDelay, retryhttp.MaxDelay, retryhttp.AttemptTimeout,
+	),
 }
 
 // ModuleVersion mirrors the entry shape returned by
