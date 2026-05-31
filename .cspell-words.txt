@@ -103,6 +103,7 @@ renovatebot
 CLI
 cli
 fe3dback
+rhysd
 modroot
 modset
 exfiltration
