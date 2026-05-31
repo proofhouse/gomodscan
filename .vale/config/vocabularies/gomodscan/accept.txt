@@ -219,6 +219,9 @@ autobuild
 failsafehttp
 retrypolicy
 synctest
+retryhttp
+[Uu]pstreams?
+jitterFactor
 fetchPage
 fakeResponse
 roundTripperFunc

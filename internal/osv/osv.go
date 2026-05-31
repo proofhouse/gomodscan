@@ -29,7 +29,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"time"
+
+	"github.com/proofhouse/gomodscan/internal/retryhttp"
 )
 
 const (
@@ -41,28 +42,32 @@ const (
 	// descriptive value lets the upstream operator tell these
 	// requests apart from a generic Go HTTP client.
 	DefaultUserAgent = "gomodscan/1 (+https://github.com/proofhouse/gomodscan)"
-
-	// defaultTimeout caps each per-module query. Most OSV responses
-	// complete in under a second; thirty seconds leaves headroom for
-	// slow links without letting a hung connection stall the scan.
-	defaultTimeout = 30 * time.Second
 )
 
 // ErrUnexpectedStatus reports that OSV.dev returned an HTTP status
-// outside the contract (anything other than 200). The wrapped
-// message records the request URL and the status code so the caller
-// can decide whether to retry or surface the failure. OSV returns
-// 200 with an empty vulns array for any package, including ones
-// it doesn't recognize, so no separate not-found sentinel applies.
+// outside the contract (anything other than 200). The shared retry
+// transport already re-issued a 429 or a transient 5xx before this
+// fires, so the wrapped status reflects a persistent failure; the
+// message records the request URL and the status code for the caller
+// to surface. OSV returns 200 with an empty vulns array for any
+// package, including ones it doesn't recognize, so no separate
+// not-found sentinel applies.
 var ErrUnexpectedStatus = errors.New("unexpected status from osv.dev")
 
 // defaultHTTPClient backs every [Client] value that doesn't override
 // [Client.HTTPClient]. One shared client (and one shared transport)
 // lets the underlying connection pool serve every module lookup,
-// which avoids a fresh TLS handshake per query.
+// which avoids a fresh TLS handshake per query. The shared retry
+// transport adds a per-attempt timeout plus retry/backoff for a 429
+// or a transient 5xx, so one throttled or flaky response doesn't
+// end the scan.
 //
 //nolint:gochecknoglobals // intentional process-wide singleton for connection pooling.
-var defaultHTTPClient = &http.Client{Timeout: defaultTimeout}
+var defaultHTTPClient = &http.Client{
+	Transport: retryhttp.NewTransport(
+		http.DefaultTransport, retryhttp.InitialDelay, retryhttp.MaxDelay, retryhttp.AttemptTimeout,
+	),
+}
 
 // Package locates a single module within an OSV ecosystem. For Go
 // modules, set Ecosystem to "Go" and Name to the module path (such
@@ -100,8 +105,9 @@ type queryResponse struct {
 }
 
 // Client posts version-and-package queries against the OSV /v1/query
-// endpoint. The zero value targets the public host with a 30 s
-// timeout. Tests inject an in-memory server through BaseURL.
+// endpoint. The zero value targets the public host through the shared
+// retry transport, which caps each attempt at 30 s. Tests inject an
+// in-memory server through BaseURL.
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
