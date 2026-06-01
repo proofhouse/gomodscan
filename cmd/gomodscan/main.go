@@ -7,7 +7,8 @@
 // their latest version (S2C2F SCA-3), and dependencies that the OSV
 // malicious-package registry flags as malware (S2C2F ING-3).
 //
-// Usage: gomodscan [-modroot dir] [-format text|sarif] [-version]
+// Usage: gomodscan [-modroot dir] [-format text|sarif] [-no-cache]
+// [-cache-dir dir] [-version]
 //
 // gomodscan reads vendor/modules.txt under -modroot (defaults to the
 // current working directory) and enumerates the vendored module set.
@@ -16,6 +17,10 @@
 // malicious-package advisories under the MAL- ID prefix. Modules
 // replaced to a local path fall outside both registries and get
 // skipped.
+//
+// By default, gomodscan caches pkg.go.dev responses on disk, so a repeated
+// run inside the server's one-hour freshness window avoids the network. Pass
+// -no-cache to turn that off.
 //
 // The -format flag selects the finding emitter. Text output (the
 // default) follows the unified shape documented in the [findings]
@@ -31,14 +36,17 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 
 	"github.com/proofhouse/gomodscan/internal/buildmeta"
+	"github.com/proofhouse/gomodscan/internal/cachehttp"
 	"github.com/proofhouse/gomodscan/internal/exitcode"
 	"github.com/proofhouse/gomodscan/internal/findings"
 	"github.com/proofhouse/gomodscan/internal/osv"
 	"github.com/proofhouse/gomodscan/internal/pkgsite"
+	"github.com/proofhouse/gomodscan/internal/retryhttp"
 	"github.com/proofhouse/gomodscan/internal/vendormod"
 )
 
@@ -175,6 +183,12 @@ func realMain(args []string, out, errOut io.Writer) int {
 	fs.SetOutput(errOut)
 	modroot := fs.String("modroot", "", "module root to scan (defaults to cwd)")
 	format := fs.String("format", "text", "output format: text or sarif")
+	noCache := fs.Bool("no-cache", false, "disable the on-disk pkg.go.dev response cache")
+	cacheDir := fs.String(
+		"cache-dir",
+		"",
+		"directory for the pkg.go.dev response cache (defaults to the per-user cache dir)",
+	)
 	showVersion := fs.Bool("version", false, "print version information and exit")
 	if err := fs.Parse(args); err != nil {
 		return exitcode.ToolFailure
@@ -186,11 +200,46 @@ func realMain(args []string, out, errOut io.Writer) int {
 		return exitcode.OK
 	}
 
-	rc, err := run(context.Background(), *modroot, *format, &pkgsite.Client{}, &osv.Client{}, out, errOut)
+	rc, err := run(
+		context.Background(),
+		*modroot,
+		*format,
+		newVersionsClient(*noCache, *cacheDir),
+		&osv.Client{},
+		out,
+		errOut,
+	)
 	if err != nil {
 		fmt.Fprintf(errOut, "%s: %v\n", toolName, err)
 	}
 	return rc
+}
+
+// newVersionsClient builds the pkg.go.dev client the deprecated scanner uses.
+// By default it layers the on-disk response cache outside the shared retry
+// transport, so a fresh hit short-circuits before any backoff or socket and a
+// repeated run inside pkg.go.dev's one-hour freshness window skips the network
+// entirely. The -no-cache flag, or a cache directory the tool can't locate,
+// falls back to the plain client, which still retries and backs off.
+func newVersionsClient(noCache bool, cacheDir string) *pkgsite.Client {
+	if noCache {
+		return &pkgsite.Client{}
+	}
+	dir := cacheDir
+	if dir == "" {
+		def, err := cachehttp.DefaultDir()
+		if err != nil {
+			return &pkgsite.Client{}
+		}
+		dir = def
+	}
+	transport := cachehttp.NewTransport(
+		retryhttp.NewTransport(
+			http.DefaultTransport, retryhttp.InitialDelay, retryhttp.MaxDelay, retryhttp.AttemptTimeout,
+		),
+		cachehttp.NewDiskStore(dir),
+	)
+	return &pkgsite.Client{HTTPClient: &http.Client{Transport: transport}}
 }
 
 // run reads the vendored module set once and runs both scanners over

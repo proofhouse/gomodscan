@@ -283,3 +283,4 @@ failsafehttp
 retrypolicy
 synctest
 retryhttp
+cachehttp

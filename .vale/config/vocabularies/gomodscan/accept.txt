@@ -229,3 +229,10 @@ retryClient
 newRetryTransport
 NewRetryTransport
 bodyclose
+cachehttp
+memStore
+cachingClient
+fromCache
+garbageStore
+cacheKey
+cacheControl
