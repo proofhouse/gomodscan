@@ -588,3 +588,29 @@ func TestRealMain(t *testing.T) {
 		assert.Contains(t, out.String(), "date:")
 	})
 }
+
+func TestNewVersionsClient(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no-cache keeps the package default transport", func(t *testing.T) {
+		t.Parallel()
+		c := newVersionsClient(true, "")
+		assert.Nil(t, c.HTTPClient, "with caching off the client falls back to the shared retry transport")
+	})
+
+	t.Run("caching injects a dedicated client", func(t *testing.T) {
+		t.Parallel()
+		c := newVersionsClient(false, t.TempDir())
+		assert.NotNil(t, c.HTTPClient, "with caching on the client carries its own cache+retry transport")
+	})
+}
+
+func TestNewVersionsClient_FallbackWhenNoCacheDir(t *testing.T) {
+	// With no cache base on any OS, the cache directory lookup errors and the
+	// constructor falls back to the plain client.
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CACHE_HOME", "")
+	t.Setenv("LocalAppData", "")
+	c := newVersionsClient(false, "")
+	assert.Nil(t, c.HTTPClient, "an unresolvable cache dir falls back to the default transport")
+}
