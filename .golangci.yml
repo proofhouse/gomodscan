@@ -142,7 +142,7 @@ linters:
               desc: "Use math/rand/v2 instead"
         "non-main files":
           files:
-            - "!**/cmd/gomodscan/main.go"
+            - "!**/cmd/*/main.go"
           deny:
             - pkg: log$
               desc: "Use log/slog instead"
