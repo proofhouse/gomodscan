@@ -50,8 +50,12 @@ repos:
         # The prose recipes (lint-prose, lint-markdown) already skip it
         # via --glob; .vale.ini cannot exempt it on its own because the
         # explicit per-rule toggles in [*.md] survive an empty
-        # BasedOnStyles in the CHANGELOG.md block. Exclude it here too.
-        exclude: ^CHANGELOG\.md$
+        # BasedOnStyles in the CHANGELOG.md block. Exclude it here too,
+        # along with the APM-deployed rules and skills under .claude/,
+        # whose prose belongs to proofhouse/agent-tools and arrives
+        # pinned by apm.lock.yaml; lint-prose skips them via --glob for
+        # the same reason.
+        exclude: ^(CHANGELOG\.md$|\.claude/(rules|skills)/)
 
   - repo: https://github.com/rvben/rumdl-pre-commit
     rev: 6a851ca55fe258291f7e2a70da0279f0f98dc636  # frozen: v0.2.9
