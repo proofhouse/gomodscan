@@ -10,12 +10,15 @@ second: '(?:\b[A-Z][a-z]+ )+\(([A-Z]{3,5})\)'
 # ... with the exception of these:
 exceptions:
   - API
+  - AST
   - ASP
   - AUD
   - CLI
+  - CIDR
   - CPU
   - CSS
   - CSV
+  - DNS
   - DEBUG
   - DOM
   - DPI
@@ -52,6 +55,7 @@ exceptions:
   - RAM
   - REB
   - REPL
+  - REST
   - RSA
   - SCA
   - SCM
@@ -68,6 +72,7 @@ exceptions:
   - URI
   - URL
   - USB
+  - UUID
   - UTF
   - XML
   - XSS
