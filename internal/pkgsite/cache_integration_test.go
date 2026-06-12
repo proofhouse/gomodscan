@@ -56,12 +56,12 @@ func TestVersions_CacheStackServesSecondCallFromDisk(t *testing.T) {
 	assert.Equal(t, "v1.0.0", first[0].Version)
 	assert.Equal(t, int32(1), originHits.Load())
 
-	// A real cache file landed on disk for the 200 max-age response.
+	// The 200 max-age response wrote a real cache file to disk.
 	entries, err := os.ReadDir(cacheDir)
 	require.NoError(t, err)
 	require.Len(t, entries, 1, "the 200 max-age response should write exactly one cache file")
 
-	// The repeat lookup comes from disk: identical result, no new origin hit.
+	// The repeat lookup comes from disk: identical result, same origin-hit count.
 	second, err := c.Versions(t.Context(), "example.com/m")
 	require.NoError(t, err)
 	assert.Equal(t, first, second, "the cached result must match the origin result")
