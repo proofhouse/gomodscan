@@ -13,3 +13,7 @@ Draft every commit message in a repo-root `COMMIT_AGENTMSG` file before you run 
 `just lint-commit-msg` mirrors the commit-msg hook: vale under the commit scope (which catches AI commit tells via `ai-tells-commits`), cspell with the commit dictionary, commitlint for the Conventional Commits shape, and commit-trailers for trailer order. Running it while drafting surfaces problems early, rather than at the commit-msg hook where a late failure interrupts the commit.
 
 The prek commit-msg hook on `.git/COMMIT_EDITMSG` stays the real gate. `COMMIT_AGENTMSG` and its recipe only preview that gate, so a clean recipe run predicts a clean commit but never replaces the hook.
+
+## Prose lint output
+
+When fixing vale findings, run `vale --output=proofhouse-agent.tmpl <paths>` instead of the default output. The template, synced from the shared [`vale-proofhouse`](https://github.com/proofhouse/vale-proofhouse) package, prints one self-contained line per finding (location, severity, rule, the exact matched text, and the replacement parameter when the rule defines one) plus a totals line, so you can apply fixes without re-reading context through separate commands. Empty output means a clean run, and the exit code carries the result.
