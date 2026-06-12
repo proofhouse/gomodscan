@@ -99,8 +99,9 @@ const (
 )
 
 // finding describes a single hit from either scanner. The kind selects
-// which fields carry meaning: retracted uses reason; deprecated adds
-// latest; malicious-package uses id and summary.
+// which fields carry meaning. Retracted findings use reason, while
+// deprecated findings add latest. Malicious-package findings fill id
+// and summary.
 type finding struct {
 	kind    findingKind
 	module  string

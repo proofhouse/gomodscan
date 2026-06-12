@@ -20,7 +20,7 @@ const (
 	// scannerInitialBufSize sizes the bufio.Scanner buffer for one
 	// vendor/modules.txt line. Most lines fit in 256 bytes, so
 	// 64 KiB leaves comfortable headroom. The shift literal avoids
-	// an untestable arithmetic-base mutation position; bufio.Scanner
+	// an untestable arithmetic-base mutation position. bufio.Scanner
 	// grows its buffer up to scannerMaxBufSize regardless.
 	scannerInitialBufSize = 1 << 16
 

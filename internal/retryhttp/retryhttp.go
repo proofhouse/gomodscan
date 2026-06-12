@@ -64,14 +64,14 @@ func NewTransport(
 	inner http.RoundTripper,
 	initialDelay, maxDelay, attemptTimeout time.Duration,
 ) http.RoundTripper {
-	//nolint:bodyclose // failsafe policies use *http.Response generics that confuse bodyclose; nothing to close.
+	//nolint:bodyclose // failsafe policies use *http.Response generics that confuse bodyclose, with nothing to close.
 	retryPolicy := failsafehttp.NewRetryPolicyBuilder().
 		WithBackoff(initialDelay, maxDelay).
 		WithJitterFactor(jitterFactor).
 		WithMaxRetries(MaxRetries).
 		ReturnLastFailure().
 		Build()
-	//nolint:bodyclose // same generics issue as the retry policy; nothing to close.
+	//nolint:bodyclose // same generics issue as the retry policy, with nothing to close.
 	attemptDeadline := timeout.New[*http.Response](attemptTimeout)
 	return failsafehttp.NewRoundTripper(inner, retryPolicy, attemptDeadline)
 }

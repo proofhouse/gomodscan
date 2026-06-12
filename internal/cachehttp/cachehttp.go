@@ -75,16 +75,16 @@ type transport struct {
 // NewTransport wraps inner with the on-disk response cache backed by store. A
 // GET whose cached copy stays fresh returns from store and never reaches
 // inner. Every other request delegates to inner, and a 200 that carries
-// max-age without no-store lands in store before it returns.
+// max-age without no-store goes into store before it returns.
 func NewTransport(inner http.RoundTripper, store Store) http.RoundTripper {
 	return &transport{inner: inner, store: store}
 }
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Only a GET reaches the cache, and the client only ever sends pkg.go.dev
-	// a GET; any other method passes straight through.
+	// a GET. Any other method passes straight through.
 	if req.Method != http.MethodGet {
-		return t.inner.RoundTrip(req) //nolint:wrapcheck // transparent pass-through; inner owns the error.
+		return t.inner.RoundTrip(req) //nolint:wrapcheck // transparent pass-through, and inner owns the error.
 	}
 
 	key := cacheKey(req)
@@ -94,7 +94,7 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	resp, err := t.inner.RoundTrip(req)
 	if err != nil {
-		return resp, err //nolint:wrapcheck // transparent; the client wraps it.
+		return resp, err //nolint:wrapcheck // transparent, so the client wraps it.
 	}
 	return t.cache(key, resp), nil
 }
@@ -115,10 +115,10 @@ func (t *transport) fresh(req *http.Request, key string) (*http.Response, bool) 
 }
 
 // cache stores resp under key when the response qualifies, then returns a
-// response whose body the caller can read. A 200 that carries max-age without
-// no-store lands in store. Anything else, the no-store 404 or a directive-free
-// response, flows straight back. A failed body read or encode skips the write
-// yet still returns the buffered body.
+// response whose body the caller can read. A 200 that carries max-age
+// without no-store goes into store. Anything else, the no-store 404 or
+// a directive-free response, flows straight back. A failed body read or
+// encode skips the write yet still returns the buffered body.
 func (t *transport) cache(key string, resp *http.Response) *http.Response {
 	cc := parseCacheControl(resp.Header.Get("Cache-Control"))
 	if resp.StatusCode != http.StatusOK || !cc.present || cc.noStore || cc.maxAge <= 0 {
@@ -245,7 +245,7 @@ type DiskStore struct {
 }
 
 // NewDiskStore returns a DiskStore rooted at dir. The directory need not
-// exist yet; the first Put creates it.
+// exist yet. The first Put creates it.
 func NewDiskStore(dir string) *DiskStore {
 	return &DiskStore{dir: dir}
 }
