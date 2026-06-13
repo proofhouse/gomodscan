@@ -51,3 +51,6 @@ gremlins-report.json
 
 # macOS
 .DS_Store
+
+# APM dependencies
+apm_modules/

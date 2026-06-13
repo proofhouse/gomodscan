@@ -236,3 +236,8 @@ fromCache
 garbageStore
 cacheKey
 cacheControl
+APM|apm
+apm_modules
+lockfiles?
+org's
+yamllint

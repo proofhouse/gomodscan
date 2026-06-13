@@ -1,0 +1,12 @@
+---
+# APM consumer manifest. Pulls the org's shared agent primitives
+# (the commit skill and the worktree rules) from proofhouse/agent-tools.
+name: gomodscan
+version: 0.1.0
+description: APM consumer manifest for gomodscan
+target:
+  - claude
+dependencies:
+  apm:
+    - proofhouse/agent-tools#v0.1.0
+  mcp: []
