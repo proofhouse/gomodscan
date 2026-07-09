@@ -187,6 +187,18 @@ func TestVersions(t *testing.T) {
 			},
 			clientOpts: func(c *pkgsite.Client) { c.UserAgent = customUA },
 		},
+		{
+			name:   "non-advancing nextPageToken is refused instead of looping",
+			module: "example.com/stuck",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				// Hand back the same nextPageToken on every request. A
+				// client that followed it would page forever; Versions must
+				// bail out with ErrStalePageToken after one repeat.
+				w.Header().Set("Content-Type", "application/json")
+				mustWrite(t, w, `{"items":[{"modulePath":"example.com/stuck","version":"v1.0.0"}],"total":1,"nextPageToken":"STUCK"}`)
+			},
+			wantErr: []error{pkgsite.ErrStalePageToken},
+		},
 	}
 
 	for _, tc := range cases {

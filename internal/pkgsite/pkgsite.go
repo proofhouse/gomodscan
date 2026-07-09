@@ -60,6 +60,13 @@ var ErrNotFound = errors.New("module not indexed on pkg.go.dev")
 // caller can decide whether to retry or surface the failure.
 var ErrUnexpectedStatus = errors.New("unexpected status from pkg.go.dev")
 
+// ErrStalePageToken reports that pkg.go.dev handed back a
+// nextPageToken identical to the one just requested. A cursor that
+// does not advance would drive the Versions pagination loop forever
+// while the result slice grows without bound, so it is refused as a
+// protocol violation rather than followed.
+var ErrStalePageToken = errors.New("pkg.go.dev returned a non-advancing nextPageToken")
+
 // defaultHTTPClient backs every [Client] value that doesn't override
 // [Client.HTTPClient]. One shared client (and one shared transport)
 // lets the underlying connection pool serve every module lookup,
@@ -140,6 +147,12 @@ func (c *Client) Versions(ctx context.Context, module string) ([]ModuleVersion, 
 		all = append(all, p.Items...)
 		if p.NextPageToken == "" {
 			return all, nil
+		}
+		// The cursor must move forward. A token equal to the one we just
+		// sent means the API is not advancing, which would loop forever
+		// and exhaust memory; refuse it instead of following it.
+		if p.NextPageToken == token {
+			return nil, fmt.Errorf("%w: %s", ErrStalePageToken, module)
 		}
 		token = p.NextPageToken
 	}
