@@ -195,7 +195,11 @@ func TestVersions(t *testing.T) {
 				// client that followed it would page forever; Versions must
 				// bail out with ErrStalePageToken after one repeat.
 				w.Header().Set("Content-Type", "application/json")
-				mustWrite(t, w, `{"items":[{"modulePath":"example.com/stuck","version":"v1.0.0"}],"total":1,"nextPageToken":"STUCK"}`)
+				mustWrite(t, w, `{
+					"items": [{"modulePath":"example.com/stuck","version":"v1.0.0"}],
+					"total": 1,
+					"nextPageToken": "STUCK"
+				}`)
 			},
 			wantErr: []error{pkgsite.ErrStalePageToken},
 		},
