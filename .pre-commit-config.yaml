@@ -60,7 +60,7 @@ repos:
         exclude: ^(CHANGELOG\.md$|\.claude/(rules|skills)/)
 
   - repo: https://github.com/rvben/rumdl-pre-commit
-    rev: 77cb2353b60aecd74aa56db968b49ae0ff25144e  # frozen: v0.2.28
+    rev: 966cefa160ed72c55d53aaeac6aa368b47b4099b  # frozen: v0.2.37
     hooks:
       - id: rumdl-fmt
       - id: rumdl
