@@ -291,3 +291,4 @@ tombi
 venv
 koalaman
 pathspec
+linuxbrew
