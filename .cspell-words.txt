@@ -285,3 +285,7 @@ synctest
 retryhttp
 cachehttp
 tmpl
+lockfiles
+pyproject
+tombi
+venv
