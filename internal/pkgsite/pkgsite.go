@@ -6,8 +6,8 @@
 // depscan tool uses it to retrieve per-version deprecation and
 // retraction status for each vendored module.
 //
-// The client wraps GET /v1beta/versions/{module}, decodes the
-// [ModuleVersion] records, and walks the nextPageToken chain so the
+// The client wraps GET /v1beta/versions/{module} and decodes the
+// [ModuleVersion] records. It walks the nextPageToken chain, so the
 // caller sees the full version list. Other v1beta endpoints
 // (package, search, vulns) stay out of scope.
 //
@@ -62,9 +62,9 @@ var ErrUnexpectedStatus = errors.New("unexpected status from pkg.go.dev")
 
 // ErrStalePageToken reports that pkg.go.dev handed back a
 // nextPageToken identical to the one just requested. A cursor that
-// does not advance would drive the Versions pagination loop forever
-// while the result slice grows without bound, so it is refused as a
-// protocol violation rather than followed.
+// doesn't advance would drive the Versions pagination loop
+// forever while the result slice grows without bound. The client
+// treats it as a protocol violation rather than following it.
 var ErrStalePageToken = errors.New("pkg.go.dev returned a non-advancing nextPageToken")
 
 // defaultHTTPClient backs every [Client] value that doesn't override
@@ -148,9 +148,9 @@ func (c *Client) Versions(ctx context.Context, module string) ([]ModuleVersion, 
 		if p.NextPageToken == "" {
 			return all, nil
 		}
-		// The cursor must move forward. A token equal to the one we just
-		// sent means the API is not advancing, which would loop forever
-		// and exhaust memory; refuse it instead of following it.
+		// The cursor must move forward. A token equal to the one just
+		// sent means the API isn't advancing, which would loop forever
+		// and exhaust memory. Refuse it instead of following it.
 		if p.NextPageToken == token {
 			return nil, fmt.Errorf("%w: %s", ErrStalePageToken, module)
 		}

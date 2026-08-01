@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Proofhouse
 
-// Command gomodscan scans the modules a Go project vendors and reports
-// two supply chain concerns in a single pass: dependencies that
+// Command gomodscan scans the modules a Go project vendors. One pass
+// covers two supply chain concerns. The first is a dependency that
 // pkg.go.dev marks as retracted at the pinned version or deprecated at
-// their latest version (S2C2F SCA-3), and dependencies that the OSV
-// malicious-package registry flags as malware (S2C2F ING-3).
+// its latest version (S2C2F SCA-3). The second is a dependency that the
+// OSV malicious-package registry flags as malware (S2C2F ING-3).
 //
 // Usage: gomodscan [-modroot dir] [-format text|sarif] [-no-cache]
 // [-cache-dir dir] [-version]
 //
 // gomodscan reads vendor/modules.txt under -modroot (defaults to the
-// current working directory) and enumerates the vendored module set.
+// current working directory) to list the vendored module set.
 // For each module it queries pkg.go.dev /v1beta/versions/{module} for
-// deprecation and retraction status, and the OSV /v1/query endpoint for
-// malicious-package advisories under the MAL- ID prefix. Modules
+// deprecation and retraction status, plus the OSV /v1/query endpoint
+// for malicious-package advisories under the MAL- ID prefix. Modules
 // replaced to a local path fall outside both registries and get
 // skipped.
 //
@@ -99,7 +99,7 @@ const (
 )
 
 // finding describes a single hit from either scanner. The kind selects
-// which fields carry meaning. Retracted findings use reason, while
+// which fields apply. Retracted findings use reason, while
 // deprecated findings add latest. Malicious-package findings fill id
 // and summary.
 type finding struct {
@@ -355,7 +355,7 @@ func evaluateDeprecated(ctx context.Context, client versionsClient, mod vendormo
 
 // collectDeprecated walks the version records once and emits one hit
 // per concern. Retraction looks at the entry whose version matches the
-// vendored pin; deprecation looks at the entry the API names as latest.
+// vendored pin. Deprecation looks at the entry the API names as latest.
 // The Go module system stores deprecation on the most recent version's
 // go.mod, so any older deprecation flags stay informational rather than
 // authoritative.

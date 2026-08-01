@@ -23,7 +23,7 @@ import (
 )
 
 // errLookupFailure stands in for any non-not-found pkg.go.dev lookup
-// error the fake client surfaces. Declared once so err113 stays quiet.
+// error the fake client surfaces. Declared once so err113 never fires.
 var errLookupFailure = errors.New("network failure")
 
 // errQueryFailure stands in for any OSV-side error the stub surfaces

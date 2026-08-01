@@ -247,3 +247,4 @@ shfmt
 koalaman
 pathspec
 editorconfig
+[Cc]acheable

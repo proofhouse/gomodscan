@@ -107,7 +107,7 @@ func Parse(r io.Reader) ([]Module, error) {
 //	<path> <version> => <replacement-path> <repl-version>  -> (repl-path, repl-version)
 //	<path> => <replacement-path> <replacement-version>     -> (repl-path, repl-version)
 //
-// Anything else (including replaced-to-local) falls through to
+// Anything else (including replaced-to-local) reaches
 // the trailing return, which yields the drop sentinel. Folding
 // the drop case into the trailing return avoids a dedicated
 // branch that would read as observationally identical and live

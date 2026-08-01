@@ -209,7 +209,7 @@ func TestTransport_PassesThroughNonGET(t *testing.T) {
 	t.Parallel()
 	store := newMemStore()
 	c, count := cachingClient(store, func(req *http.Request) *http.Response {
-		// A cacheable-looking response: only the method keeps it out of the cache.
+		// Only the method keeps this otherwise cacheable response out of the cache.
 		return reply(req, http.StatusOK, okBody, "max-age=3600")
 	})
 
