@@ -242,3 +242,7 @@ apm_modules
 lockfiles?
 org's
 yamllint
+shellcheck
+shfmt
+koalaman
+pathspec

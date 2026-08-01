@@ -103,6 +103,24 @@ actionlint_image := "docker.io/rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f
 # the shared workflow applies in CI.
 actionlint := 'DOCKER_CONFIG="$(mktemp -d)" PATH="$(dirname ' + container_runtime + '):$PATH" ' + container_runtime + ' run --rm -v "$(pwd):/repo:ro" -w /repo ' + actionlint_image
 
+# shellcheck version pin. Same Docker-pin pattern as the linters above, and
+# the same image proofhouse/pre-commit-hooks runs, so one shellcheck version
+# covers the org's standalone scripts. Renovate tracks the version + digest
+# pair via the customManager in renovate.json5.
+#
+# The actionlint image above also bundles shellcheck, but it only reaches
+# `run:` blocks inside workflow YAML. Tracked *.sh files are a separate
+# corpus that nothing else in this repo lints.
+#
+# renovate: datasource=docker depName=koalaman/shellcheck
+shellcheck_version := "v0.11.0"
+shellcheck_image := "docker.io/koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d"
+
+# shellcheck invocation. Mounts the tree read-only since shellcheck only
+# reads source. The image's entrypoint is shellcheck itself, so the recipe
+# appends bare file paths.
+shellcheck := 'DOCKER_CONFIG="$(mktemp -d)" PATH="$(dirname ' + container_runtime + '):$PATH" ' + container_runtime + ' run --rm -v "$(pwd):/mnt:ro" -w /mnt ' + shellcheck_image
+
 # Build metadata. `date` is the *committer date* (UTC, ISO-8601),
 # not build invocation time, so two builds of the same commit produce
 # identical binaries. `source_date_epoch` exports the same instant as
@@ -195,6 +213,18 @@ format-config *args:
 format-toml:
     tombi format
 
+# Format tracked shell scripts in place via shfmt (which reads .editorconfig
+# for indent style and width). The vendor/ pathspec exclusion keeps the
+# formatter off third-party scripts, matching the top-level `exclude:` in
+# .pre-commit-config.yaml — vendored source is reviewed at PR time, not
+# reformatted to this project's style. The guard covers the case where the
+# pathspec matches nothing, since bare shfmt with no paths reads stdin and
+# would hang.
+[script]
+format-shell:
+    files=$(git ls-files '*.sh' ':!:vendor/')
+    if [[ -n "$files" ]]; then shfmt -w $files; fi
+
 # --- Fix ---
 
 # Fix Go linting issues. `go fix` (Go 1.26+) runs the modernizer analyzers;
@@ -226,8 +256,9 @@ lint-go-all: lint-go lint-go-modernize lint-go-deadcode lint-go-arch lint-workfl
 
 # Run every linter that operates on the source tree. Aggregator over
 # the Go gates (via `lint-go-all`), prose (vale), spelling (cspell),
-# Markdown (rumdl), config / JS / TS (biome), and YAML (yamllint).
-lint: lint-go-all lint-prose lint-spelling lint-markdown lint-config lint-yaml lint-toml
+# Markdown (rumdl), config / JS / TS (biome), YAML (yamllint), TOML
+# (tombi), and shell (shellcheck + shfmt).
+lint: lint-go-all lint-prose lint-spelling lint-markdown lint-config lint-yaml lint-toml lint-shell lint-shell-fmt
 
 # Run Go linters (golangci-lint via the pinned Docker image, vendor-mode).
 # --modules-download-mode=vendor matches `just build`, so the linter sees
@@ -333,6 +364,28 @@ lint-yaml *args:
 # run one actionlint, both bumped by Renovate.
 lint-workflows:
     {{ actionlint }}
+
+# Lint tracked shell scripts via the SHA-pinned shellcheck image. The
+# actionlint gate above runs shellcheck too, but only against `run:` blocks
+# embedded in workflow YAML; standalone *.sh files (tools/fuzz.sh today) are
+# a separate corpus that nothing else here inspects.
+#
+# The ':!:vendor/' pathspec drops third-party scripts, mirroring the
+# top-level `exclude:` in .pre-commit-config.yaml. The guard covers an empty
+# match, since shellcheck with no file arguments exits non-zero on usage.
+[script]
+lint-shell:
+    files=$(git ls-files '*.sh' ':!:vendor/')
+    if [[ -n "$files" ]]; then {{ shellcheck }} $files; fi
+
+# Fail if shfmt would reformat any tracked shell script. The read-only
+# mirror of `format-shell`, so a contributor gets told to run the fixer
+# rather than having the gate rewrite the tree underneath them. -d prints
+# the offending diff, which is the whole message.
+[script]
+lint-shell-fmt:
+    files=$(git ls-files '*.sh' ':!:vendor/')
+    if [[ -n "$files" ]]; then shfmt -d $files; fi
 
 # Pre-validate a drafted commit message against the same gates the
 # commit-msg hook runs, so message problems surface while iterating

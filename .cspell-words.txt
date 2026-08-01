@@ -289,3 +289,5 @@ lockfiles
 pyproject
 tombi
 venv
+koalaman
+pathspec
