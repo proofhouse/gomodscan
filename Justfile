@@ -1,5 +1,5 @@
-set unstable := true
-set positional-arguments := true
+set unstable
+set positional-arguments
 
 # Run [script] recipes under bash rather than the default sh. On Linux
 # sh is dash, which lacks [[ ]], <<<, and set -o pipefail — constructs
@@ -225,6 +225,12 @@ format-shell:
     files=$(git ls-files '*.sh' ':!:vendor/')
     if [[ -n "$files" ]]; then shfmt -w $files; fi
 
+# Rewrite the Justfile through just's own formatter. Paired with
+# `lint-just`'s --check gate below, so a hand-edited recipe that drifts from
+# canonical spacing gets fixed here rather than argued about in review.
+format-just:
+    just --fmt --unstable
+
 # --- Fix ---
 
 # Fix Go linting issues. `go fix` (Go 1.26+) runs the modernizer analyzers;
@@ -257,8 +263,9 @@ lint-go-all: lint-go lint-go-modernize lint-go-deadcode lint-go-arch lint-workfl
 # Run every linter that operates on the source tree. Aggregator over
 # the Go gates (via `lint-go-all`), prose (vale), spelling (cspell),
 # Markdown (rumdl), config / JS / TS (biome), YAML (yamllint), TOML
-# (tombi), and shell (shellcheck + shfmt).
-lint: lint-go-all lint-prose lint-spelling lint-markdown lint-config lint-yaml lint-toml lint-shell lint-shell-fmt
+# (tombi), shell (shellcheck + shfmt), and the Justfile's own
+# formatting (just --fmt).
+lint: lint-go-all lint-prose lint-spelling lint-markdown lint-config lint-yaml lint-toml lint-shell lint-shell-fmt lint-just
 
 # Run Go linters (golangci-lint via the pinned Docker image, vendor-mode).
 # --modules-download-mode=vendor matches `just build`, so the linter sees
@@ -386,6 +393,14 @@ lint-shell:
 lint-shell-fmt:
     files=$(git ls-files '*.sh' ':!:vendor/')
     if [[ -n "$files" ]]; then shfmt -d $files; fi
+
+# Fail if just's own formatter would rewrite this Justfile. --unstable is
+# required because --fmt is still gated behind just's unstable flag; the
+# `set unstable` at the top of the file governs recipe attributes, not this
+# CLI invocation, so the flag has to be repeated here. `just format-just`
+# is the in-place fixer.
+lint-just:
+    just --fmt --check --unstable
 
 # Pre-validate a drafted commit message against the same gates the
 # commit-msg hook runs, so message problems surface while iterating

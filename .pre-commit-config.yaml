@@ -129,6 +129,16 @@ repos:
         types: [shell]
         pass_filenames: false
 
+      # just's formatter checks the Justfile rather than rewriting it, so a
+      # reformat stays an explicit `just format-just` rather than a surprise
+      # edit staged mid-commit.
+      - id: just-fmt
+        name: just --fmt --check
+        entry: just lint-just
+        language: system
+        files: ^Justfile$
+        pass_filenames: false
+
       - id: vendor-tidy
         name: go mod tidy + vendor drift check
         entry: bash -c 'go mod tidy && go mod vendor && git diff --exit-code -- go.mod go.sum vendor/'
