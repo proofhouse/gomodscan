@@ -22,8 +22,8 @@ import (
 const (
 	// MaxRetries bounds how many times the transport re-issues a request
 	// after a retryable response (429 or most 5xx) or a transient network
-	// error. Two keeps the worst-case per-request wait modest when an
-	// upstream throttles the whole host.
+	// error. The low ceiling holds the worst-case per-request wait down
+	// when an upstream throttles the whole host.
 	MaxRetries = 2
 
 	// InitialDelay sets the first exponential-backoff step the transport
@@ -50,14 +50,15 @@ const (
 // failsafehttp.NewRetryPolicyBuilder already retries the responses worth a
 // second look (a 429 or most 5xx) along with transient network errors, and
 // honors a Retry-After header. On top, this adds exponential backoff for the
-// no-header case plus a jitter factor, and caps the attempts. Composing the
+// no-header case plus a jitter factor, under a ceiling of MaxRetries
+// attempts. Composing the
 // timeout policy inside the retry policy bounds each attempt rather than the
 // whole sequence. Callers pass the durations, so tests drive the policy with
 // their own timing.
 //
-// ReturnLastFailure keeps retries transparent: once the policy runs out of
-// attempts, the transport returns the final response (or error) directly
-// rather than a retrypolicy.ExceededError wrapper, so a caller's status
+// ReturnLastFailure keeps retries transparent. Once the policy exhausts its
+// attempts and gives up, the transport returns the final response (or error)
+// directly rather than a retrypolicy.ExceededError wrapper, so a caller's status
 // switch still maps a persistent 429 or 5xx onto its own unexpected-status
 // error.
 func NewTransport(

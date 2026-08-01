@@ -14,9 +14,9 @@
 // The level uses one of the SARIF severity words error, warning, or
 // note. The tool/rule pair maps onto the SARIF ruleId on the
 // corresponding result. Each trailing key=value pair maps onto an
-// entry in the SARIF property bag. The emitter sorts property keys
-// alphabetically for deterministic output and double-quotes any
-// value containing whitespace, an equals sign, or a literal quote.
+// entry in the SARIF property bag, under alphabetically ordered keys
+// for deterministic output and with double quotes around any value
+// containing whitespace, an equals sign, or a literal quote.
 //
 // SARIF emission uses [github.com/owenrumney/go-sarif/v3] against
 // the v2.1.0 schema. Each result from [AddResult] carries a logical

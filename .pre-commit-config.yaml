@@ -110,6 +110,45 @@ repos:
         types: [go]
         pass_filenames: false
 
+      # Shell gates, mirroring the golangci-lint pair above: the formatter
+      # runs first and rewrites in place, then shellcheck inspects the
+      # result. Both recipes derive their own file list from `git ls-files`
+      # (minus vendor/), so pass_filenames stays false; types: [shell]
+      # only decides whether the hook fires at all.
+      - id: shfmt
+        name: shfmt
+        entry: just format-shell
+        language: system
+        types: [shell]
+        pass_filenames: false
+
+      - id: shellcheck
+        name: shellcheck
+        entry: just lint-shell
+        language: system
+        types: [shell]
+        pass_filenames: false
+
+      # just's formatter checks the Justfile rather than rewriting it, so a
+      # reformat stays an explicit `just format-just` rather than a surprise
+      # edit staged mid-commit.
+      - id: just-fmt
+        name: just --fmt --check
+        entry: just lint-just
+        language: system
+        files: ^Justfile$
+        pass_filenames: false
+
+      # Whitespace and indentation against .editorconfig. The recipe walks
+      # the tracked tree itself with scope from .editorconfig-checker.json,
+      # so the hook fires on any text file but passes no filenames.
+      - id: editorconfig-checker
+        name: editorconfig-checker
+        entry: just lint-editorconfig
+        language: system
+        types: [text]
+        pass_filenames: false
+
       - id: vendor-tidy
         name: go mod tidy + vendor drift check
         entry: bash -c 'go mod tidy && go mod vendor && git diff --exit-code -- go.mod go.sum vendor/'

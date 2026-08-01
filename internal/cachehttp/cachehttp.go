@@ -19,7 +19,7 @@
 //
 // A cache miss covers the only failure mode the transport allows. A store
 // error or a corrupt entry turns into a miss, and a failed write drops
-// silently. The request then falls through to the origin, so the cache speeds
+// silently. The request then reaches the origin anyway, so the cache speeds
 // a scan up yet never fails one.
 //
 // Layer the cache outside the retry transport
