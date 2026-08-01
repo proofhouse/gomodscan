@@ -85,6 +85,15 @@ go_arch_lint := 'DOCKER_CONFIG="$(mktemp -d)" PATH="$(dirname ' + container_runt
 # lint-workflows.yml in proofhouse/github-actions runs, so `just
 # lint-workflows` and CI share one actionlint.
 #
+# The tombi release this repo's config and committed formatting are
+# verified against. tombi is brew-installed, so `check-tombi-version`
+# compares the local binary with it: a mismatch means local formatting
+# may differ from what the gate expects.
+
+# renovate: datasource=github-releases depName=tombi-toml/tombi
+
+tombi_version := "1.2.5"
+
 # renovate: datasource=docker depName=rhysd/actionlint
 actionlint_version := "1.7.12"
 actionlint_image := "docker.io/rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667"
@@ -351,6 +360,21 @@ lint-commit-msg:
 lint-toml:
     tombi format --check --diff
     tombi lint --offline --error-on-warnings
+
+# Warn when the locally installed tombi differs from the verified
+# release. Advisory rather than fatal: tombi comes from Homebrew and
+# moves on its own schedule, and that is fine so long as it stays
+# visible rather than silently reformatting a file the gate then
+# rejects.
+[script]
+check-tombi-version:
+    local=$(tombi --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    if [[ "${local}" != "{{ tombi_version }}" ]]; then
+        echo "warning: local tombi ${local} != verified {{ tombi_version }}" >&2
+        echo "         formatting may differ from what the gate expects" >&2
+    else
+        echo "tombi ${local} matches the verified release"
+    fi
 
 # --- Test ---
 
