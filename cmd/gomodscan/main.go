@@ -7,8 +7,10 @@
 // its latest version (S2C2F SCA-3). The second is a dependency that the
 // OSV malicious-package registry flags as malware (S2C2F ING-3).
 //
-// Usage: gomodscan [-modroot dir] [-format text|sarif] [-no-cache]
-// [-cache-dir dir] [-version]
+// Usage:
+//
+//	gomodscan [-modroot dir] [-format text|sarif] [-no-cache]
+//	          [-cache-dir dir] [-version]
 //
 // gomodscan reads vendor/modules.txt under -modroot (defaults to the
 // current working directory) to list the vendored module set.
