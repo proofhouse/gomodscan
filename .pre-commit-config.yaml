@@ -139,6 +139,16 @@ repos:
         files: ^Justfile$
         pass_filenames: false
 
+      # Whitespace and indentation against .editorconfig. The recipe walks
+      # the tracked tree itself with scope from .editorconfig-checker.json,
+      # so the hook fires on any text file but passes no filenames.
+      - id: editorconfig-checker
+        name: editorconfig-checker
+        entry: just lint-editorconfig
+        language: system
+        types: [text]
+        pass_filenames: false
+
       - id: vendor-tidy
         name: go mod tidy + vendor drift check
         entry: bash -c 'go mod tidy && go mod vendor && git diff --exit-code -- go.mod go.sum vendor/'

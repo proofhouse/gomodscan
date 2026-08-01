@@ -32,6 +32,7 @@ golangci_lint_image := "docker.io/golangci/golangci-lint:v2.12.2@sha256:5cceeef0
 container_runtime := env("CONTAINER_RUNTIME", `bash -c '
     docker_path=$(command -v docker 2>/dev/null || true)
     podman_path=$(command -v podman 2>/dev/null || true)
+    # editorconfig-checker-disable
     for p in "$docker_path" \
              /usr/local/bin/docker \
              /opt/homebrew/bin/docker \
@@ -42,6 +43,7 @@ container_runtime := env("CONTAINER_RUNTIME", `bash -c '
              /opt/podman/bin/podman; do
         if [ -n "$p" ] && [ -x "$p" ]; then echo "$p"; exit 0; fi
     done
+    # editorconfig-checker-enable
     echo docker
 '`)
 
@@ -263,9 +265,10 @@ lint-go-all: lint-go lint-go-modernize lint-go-deadcode lint-go-arch lint-workfl
 # Run every linter that operates on the source tree. Aggregator over
 # the Go gates (via `lint-go-all`), prose (vale), spelling (cspell),
 # Markdown (rumdl), config / JS / TS (biome), YAML (yamllint), TOML
-# (tombi), shell (shellcheck + shfmt), and the Justfile's own
-# formatting (just --fmt).
-lint: lint-go-all lint-prose lint-spelling lint-markdown lint-config lint-yaml lint-toml lint-shell lint-shell-fmt lint-just
+# (tombi), shell (shellcheck + shfmt), the Justfile's own formatting
+# (just --fmt), and whitespace conventions tree-wide
+# (editorconfig-checker).
+lint: lint-go-all lint-prose lint-spelling lint-markdown lint-config lint-yaml lint-toml lint-shell lint-shell-fmt lint-just lint-editorconfig
 
 # Run Go linters (golangci-lint via the pinned Docker image, vendor-mode).
 # --modules-download-mode=vendor matches `just build`, so the linter sees
@@ -401,6 +404,22 @@ lint-shell-fmt:
 # is the in-place fixer.
 lint-just:
     just --fmt --check --unstable
+
+# Check the tree against .editorconfig: charset, line endings, final
+# newline, trailing whitespace, indent style and width. Every repo in the
+# org ships an .editorconfig and, until this gate, nothing enforced it —
+# the pre-commit whitespace hooks cover final newline and trailing space
+# but not indentation.
+#
+# The Homebrew formula installs the binary as `editorconfig-checker` only;
+# the short `ec` alias upstream documents comes from the release tarballs,
+# not from brew, so the recipe spells out the long name. With no path
+# arguments the checker walks the git-tracked file set, and the scope
+# (vendored code, Vale's synced styles, build output, the generated
+# changelog) comes from .editorconfig-checker.json rather than a CLI arg
+# list — that is the config filename editorconfig-checker v3 reads.
+lint-editorconfig:
+    editorconfig-checker
 
 # Pre-validate a drafted commit message against the same gates the
 # commit-msg hook runs, so message problems surface while iterating

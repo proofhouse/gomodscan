@@ -246,3 +246,4 @@ shellcheck
 shfmt
 koalaman
 pathspec
+editorconfig
