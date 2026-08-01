@@ -168,9 +168,11 @@ default: lint-go test
 
 # --- Setup ---
 
-# Set up development environment. New contributors run this once after
-# cloning. Idempotent: re-running upgrades dependencies, refreshes
-# Vale's synced style packages, and re-installs the git hooks.
+# New contributors run this once after cloning. Idempotent: re-running
+# upgrades dependencies, refreshes Vale's synced style packages, and
+# re-installs the git hooks.
+
+# Set up development environment.
 setup:
     just install-brew
     just install-tools
@@ -180,8 +182,10 @@ setup:
 install-brew:
     brew bundle check || brew bundle install
 
-# Refresh non-brew tooling. Today that means Vale's synced style
-# packages; grows as new sync-style tools land.
+# Today that means Vale's synced style packages; grows as new
+# sync-style tools land.
+
+# Refresh non-brew tooling.
 install-tools:
     vale sync
 
@@ -213,8 +217,9 @@ clean:
 format-go *args:
     {{ golangci_lint }} fmt {{ args }}
 
-# Format Markdown files (whitespace, list markers, code fence styles).
 # Rewrites in place. Pair with `fix-markdown` for semantic lint fixes.
+
+# Format Markdown files (whitespace, list markers, code fence styles).
 format-markdown *args:
     rumdl fmt {{ if args == "" { "." } else { args } }}
 
@@ -222,76 +227,90 @@ format-markdown *args:
 format-config *args:
     biome format --write {{ if args == "" { "." } else { args } }}
 
-# In-place TOML formatter (tombi 1.2.0) — the fixer paired with `lint-toml`'s --check
-# gate. Rewrites whitespace/style only; key and array order are preserved (schema-driven
-# reordering is disabled in tombi.toml). Excludes and lockfile skips come from tombi.toml.
+# The fixer paired with `lint-toml`'s --check gate. Rewrites
+# whitespace/style only; key and array order are preserved
+# (schema-driven reordering is disabled in tombi.toml). Excludes and
+# lockfile skips come from tombi.toml.
+
+# Format TOML files in place (tombi 1.2.0).
 format-toml:
     tombi format
 
-# Format tracked shell scripts in place via shfmt (which reads .editorconfig
-# for indent style and width). The vendor/ pathspec exclusion keeps the
-# formatter off third-party scripts, matching the top-level `exclude:` in
-# .pre-commit-config.yaml — vendored source is reviewed at PR time, not
-# reformatted to this project's style. The guard covers the case where the
-# pathspec matches nothing, since bare shfmt with no paths reads stdin and
-# would hang.
+# shfmt reads .editorconfig for indent style and width. The vendor/
+# pathspec exclusion keeps the formatter off third-party scripts,
+# matching the top-level `exclude:` in .pre-commit-config.yaml —
+# vendored source is reviewed at PR time, not reformatted to this
+# project's style. The guard covers the case where the pathspec matches
+# nothing, since bare shfmt with no paths reads stdin and would hang.
+
+# Format tracked shell scripts in place via shfmt.
 [script]
 format-shell:
     files=$(git ls-files '*.sh' ':!:vendor/')
     if [[ -n "$files" ]]; then shfmt -w $files; fi
 
-# Rewrite the Justfile through just's own formatter. Paired with
-# `lint-just`'s --check gate below, so a hand-edited recipe that drifts from
-# canonical spacing gets fixed here rather than argued about in review.
+# Paired with `lint-just`'s --check gate below, so a hand-edited recipe
+# that drifts from canonical spacing gets fixed here rather than argued
+# about in review.
+
+# Rewrite the Justfile through just's own formatter.
 format-just:
     just --fmt --unstable
 
 # --- Fix ---
 
-# Fix Go linting issues. `go fix` (Go 1.26+) runs the modernizer analyzers;
-# the blog post (https://go.dev/blog/gofix) recommends running it to a fixed
-# point — usually one extra pass picks up fixes that became valid after the
+# `go fix` (Go 1.26+) runs the modernizer analyzers; the blog post
+# (https://go.dev/blog/gofix) recommends running it to a fixed point —
+# usually one extra pass picks up fixes that became valid after the
 # first round. golangci-lint fmt + --fix run afterward.
+
+# Fix Go linting issues.
 fix-go *args:
     go fix {{ if args == "" { "./..." } else { args } }}
     go fix {{ if args == "" { "./..." } else { args } }}
     {{ golangci_lint }} fmt {{ args }}
     {{ golangci_lint }} run --fix --modules-download-mode=vendor {{ args }}
 
-# Apply rumdl's auto-fixable rules to Markdown files. Complement to
-# `format-markdown` (which only rewrites whitespace and ordering, not
-# semantic lints).
+# Complement to `format-markdown` (which only rewrites whitespace and
+# ordering, not semantic lints).
+
+# Apply rumdl's auto-fixable rules to Markdown files.
 fix-markdown *args:
     rumdl check --fix {{ if args == "" { "." } else { args } }}
 
 # --- Lint ---
 
-# Aggregator over the Go-flavored lint sub-recipes: golangci-lint,
-# the modernizer gate, the deadcode reachability scan, go-arch-lint
-# layering, and actionlint. Carved out so the `lint-go` job in
-# `.github/workflows/ci.yml` invokes a single recipe rather than
-# enumerate the Go gates in YAML. `just lint` below composes from
-# this plus the prose, spelling, Markdown, config, and YAML gates
-# whose CI install paths land in follow-up workflows.
+# Aggregates golangci-lint, the modernizer gate, the deadcode
+# reachability scan, go-arch-lint layering, and actionlint. Carved out
+# so the `lint-go` job in `.github/workflows/ci.yml` invokes a single
+# recipe rather than enumerate the Go gates in YAML. `just lint` below
+# composes from this plus the prose, spelling, Markdown, config, and
+# YAML gates whose CI install paths land in follow-up workflows.
+
+# Run the Go-flavored lint sub-recipes.
 lint-go-all: lint-go lint-go-modernize lint-go-deadcode lint-go-arch lint-workflows
 
-# Run every linter that operates on the source tree. Aggregator over
-# the Go gates (via `lint-go-all`), prose (vale), spelling (cspell),
-# Markdown (rumdl), config / JS / TS (biome), YAML (yamllint), TOML
-# (tombi), shell (shellcheck + shfmt), the Justfile's own formatting
-# (just --fmt), and whitespace conventions tree-wide
+# Aggregator over the Go gates (via `lint-go-all`), prose (vale),
+# spelling (cspell), Markdown (rumdl), config / JS / TS (biome), YAML
+# (yamllint), TOML (tombi), shell (shellcheck + shfmt), the Justfile's
+# own formatting (just --fmt), and whitespace conventions tree-wide
 # (editorconfig-checker).
+
+# Run every linter that operates on the source tree.
 lint: lint-go-all lint-prose lint-spelling lint-markdown lint-config lint-yaml lint-toml lint-shell lint-shell-fmt lint-just lint-editorconfig
 
-# Run Go linters (golangci-lint via the pinned Docker image, vendor-mode).
-# --modules-download-mode=vendor matches `just build`, so the linter sees
-# exactly the dependency set the compiler does and never falls back to
-# the module proxy.
+# --modules-download-mode=vendor matches `just build`, so the linter
+# sees exactly the dependency set the compiler does and never falls back
+# to the module proxy.
+
+# Run Go linters via the pinned golangci-lint image in vendor mode.
 lint-go *args:
     {{ golangci_lint }} run --modules-download-mode=vendor {{ args }}
 
-# Fail if `go fix` would modernize anything. Mirrors the vendor-drift check:
-# contributors must run `just fix-go` before pushing.
+# Mirrors the vendor-drift check: contributors must run `just fix-go`
+# before pushing.
+
+# Fail if `go fix` would modernize anything.
 [script]
 lint-go-modernize:
     diff_output=$(go fix -diff ./... 2>&1)
@@ -301,10 +320,12 @@ lint-go-modernize:
         exit 1
     fi
 
-# Fail if `deadcode` finds unreachable functions starting from the binary
-# entry points. Whole-program reachability complements the package-scoped
-# `unused` linter in golangci-lint. The tool prints findings but exits 0,
-# so any output is treated as failure.
+# Reachability starts from the binary entry points. Whole-program
+# reachability complements the package-scoped `unused` linter in
+# golangci-lint. The tool prints findings but exits 0, so any output is
+# treated as failure.
+
+# Fail if `deadcode` finds unreachable functions.
 [script]
 lint-go-deadcode:
     output=$(go tool deadcode ./cmd/... 2>&1)
@@ -314,9 +335,11 @@ lint-go-deadcode:
         exit 1
     fi
 
-# Same as lint-go-deadcode but roots reachability at every test binary too.
-# Noisier; intentionally not part of the default `lint` gate. Run before
-# wholesale refactors to surface code only kept alive by tests.
+# Noisier than `lint-go-deadcode`; intentionally not part of the default
+# `lint` gate. Run before wholesale refactors to surface code only kept
+# alive by tests.
+
+# Run the deadcode scan rooted at every test binary too.
 [script]
 lint-go-deadcode-tests:
     output=$(go tool deadcode -test ./... 2>&1)
@@ -326,103 +349,116 @@ lint-go-deadcode-tests:
         exit 1
     fi
 
-# Enforce intra-project layering rules from .go-arch-lint.yml. The
-# compiler covers cycles and outside-org visibility; this catches the
-# layer rules it can't (e.g., "cmd may depend on internal but not the
-# reverse"). Pinned Docker image, same pattern as golangci-lint.
+# The compiler covers cycles and outside-org visibility; this catches
+# the layer rules it can't (e.g., "cmd may depend on internal but not
+# the reverse"). Pinned Docker image, same pattern as golangci-lint.
+
+# Enforce intra-project layering rules from .go-arch-lint.yml.
 lint-go-arch:
     {{ go_arch_lint }} check --project-path /app
 
-# Lint prose in Markdown files and source comments via vale. Glob
-# excludes the LICENSE (canonical Apache 2.0 text), the auto-generated
-# changelog, vale's own style packages, scratch dirs, vendored code,
-# the gitignored agent worktrees under .claude/worktrees/ (whose nested
-# vendor trees otherwise crash vale), the apm_modules/ package cache
-# (whose nested .vale.ini also crashes vale), the APM-deployed rules
-# and skills under .claude/ (upstream-owned content pinned by
-# apm.lock.yaml, mirroring the rumdl SKILL.md exclude), and the
-# COMMIT_AGENTMSG draft (the `lint-commit-msg` recipe owns that one
+# The glob excludes the LICENSE (canonical Apache 2.0 text), the
+# auto-generated changelog, vale's own style packages, scratch dirs,
+# vendored code, the gitignored agent worktrees under .claude/worktrees/
+# (whose nested vendor trees otherwise crash vale), the apm_modules/
+# package cache (whose nested .vale.ini also crashes vale), the
+# APM-deployed rules and skills under .claude/ (upstream-owned content
+# pinned by apm.lock.yaml, mirroring the rumdl SKILL.md exclude), and
+# the COMMIT_AGENTMSG draft (the `lint-commit-msg` recipe owns that one
 # under the stricter commit scope); the per-file-type rules in
 # .vale.ini decide what else gets inspected.
+
+# Lint prose in Markdown files and source comments via vale.
 lint-prose *args:
     vale --output=proofhouse-agent.tmpl --glob='!{LICENSE,CHANGELOG.md,.vale/*,tmp/*,vendor/*,apm_modules/*,.claude/worktrees/*,.claude/rules/*,.claude/skills/*,COMMIT_AGENTMSG}' {{ if args == "" { "." } else { args } }}
 
-# Check spelling across the tree against the project dictionary at
-# .cspell-words.txt. cspell ignores binaries, generated files, and the
-# vendor/ tree via the ignorePaths block in .cspell.jsonc. The
-# COMMIT_AGENTMSG draft gets excluded here and checked by
-# `lint-commit-msg` instead, so a work-in-progress message never trips
-# the tree-wide spell check.
+# The project dictionary lives at .cspell-words.txt. cspell ignores
+# binaries, generated files, and the vendor/ tree via the ignorePaths
+# block in .cspell.jsonc. The COMMIT_AGENTMSG draft gets excluded here
+# and checked by `lint-commit-msg` instead, so a work-in-progress
+# message never trips the tree-wide spell check.
+
+# Check spelling across the tree via cspell.
 lint-spelling *args:
     cspell --config .cspell.jsonc --no-summary --no-progress --no-must-find-files --exclude COMMIT_AGENTMSG {{ if args == "" { "." } else { args } }}
 
-# Lint Markdown files against the project's .rumdl.toml ruleset.
 # rumdl handles structural lints (heading style, list marker style,
 # code fence style); vale handles prose.
+
+# Lint Markdown files against the project's .rumdl.toml ruleset.
 lint-markdown *args:
     rumdl check {{ if args == "" { "." } else { args } }}
 
-# Lint JSON / JS / TS files via biome. Recommended ruleset, biome's
-# own formatter; covers config files (biome.json, package.json, tsconfig)
-# and any future scripts under .github/actions/ or tools/.
+# Recommended ruleset, biome's own formatter; covers config files
+# (biome.json, package.json, tsconfig) and any future scripts under
+# .github/actions/ or tools/.
+
+# Lint JSON / JS / TS files via biome.
 lint-config *args:
     biome check --files-ignore-unknown=true {{ if args == "" { "." } else { args } }}
 
-# Lint YAML files (config, workflows, action definitions). --strict
-# treats warnings as errors so the gate matches CI behavior; per-rule
-# tuning lives in .yamllint.yaml.
+# --strict treats warnings as errors so the gate matches CI behavior;
+# per-rule tuning lives in .yamllint.yaml.
+
+# Lint YAML files (config, workflows, action definitions).
 lint-yaml *args:
     yamllint --strict {{ if args == "" { "." } else { args } }}
 
-# Lint GitHub Actions workflow files via actionlint, run from its
-# SHA-pinned Docker image (which bundles shellcheck). actionlint walks
-# `.github/workflows/` by default, parses each workflow, and flags
-# unknown actions, mis-typed expressions, shellcheck issues inside
-# `run:` blocks, and SHA-pin drift. Complements `lint-yaml` (which
-# checks YAML structure) with workflow-shape rules yamllint can't see.
+# The run happens inside actionlint's SHA-pinned Docker image (which
+# bundles shellcheck). actionlint walks `.github/workflows/` by default,
+# parses each workflow, and flags unknown actions, mis-typed
+# expressions, shellcheck issues inside `run:` blocks, and SHA-pin
+# drift. Complements `lint-yaml` (which checks YAML structure) with
+# workflow-shape rules yamllint can't see.
 #
 # The image pin (above) is the same one the reusable
 # `.github/workflows/lint-workflows.yml` delegates to in
 # proofhouse/github-actions, so this local entrypoint and the CI gate
 # run one actionlint, both bumped by Renovate.
+
+# Lint GitHub Actions workflow files via actionlint.
 lint-workflows:
     {{ actionlint }}
 
-# Lint tracked shell scripts via the SHA-pinned shellcheck image. The
-# actionlint gate above runs shellcheck too, but only against `run:` blocks
-# embedded in workflow YAML; standalone *.sh files (tools/fuzz.sh today) are
-# a separate corpus that nothing else here inspects.
+# The actionlint gate above runs shellcheck too, but only against `run:`
+# blocks embedded in workflow YAML; standalone *.sh files (tools/fuzz.sh
+# today) are a separate corpus that nothing else here inspects.
 #
 # The ':!:vendor/' pathspec drops third-party scripts, mirroring the
-# top-level `exclude:` in .pre-commit-config.yaml. The guard covers an empty
-# match, since shellcheck with no file arguments exits non-zero on usage.
+# top-level `exclude:` in .pre-commit-config.yaml. The guard covers an
+# empty match, since shellcheck with no file arguments exits non-zero on
+# usage.
+
+# Lint tracked shell scripts via the SHA-pinned shellcheck image.
 [script]
 lint-shell:
     files=$(git ls-files '*.sh' ':!:vendor/')
     if [[ -n "$files" ]]; then {{ shellcheck }} $files; fi
 
-# Fail if shfmt would reformat any tracked shell script. The read-only
-# mirror of `format-shell`, so a contributor gets told to run the fixer
-# rather than having the gate rewrite the tree underneath them. -d prints
-# the offending diff, which is the whole message.
+# The read-only mirror of `format-shell`, so a contributor gets told to
+# run the fixer rather than having the gate rewrite the tree underneath
+# them. -d prints the offending diff, which is the whole message.
+
+# Fail if shfmt would reformat any tracked shell script.
 [script]
 lint-shell-fmt:
     files=$(git ls-files '*.sh' ':!:vendor/')
     if [[ -n "$files" ]]; then shfmt -d $files; fi
 
-# Fail if just's own formatter would rewrite this Justfile. --unstable is
-# required because --fmt is still gated behind just's unstable flag; the
-# `set unstable` at the top of the file governs recipe attributes, not this
-# CLI invocation, so the flag has to be repeated here. `just format-just`
-# is the in-place fixer.
+# --unstable is required because --fmt is still gated behind just's
+# unstable flag; the `set unstable` at the top of the file governs
+# recipe attributes, not this CLI invocation, so the flag has to be
+# repeated here. `just format-just` is the in-place fixer.
+
+# Fail if just's own formatter would rewrite this Justfile.
 lint-just:
     just --fmt --check --unstable
 
-# Check the tree against .editorconfig: charset, line endings, final
-# newline, trailing whitespace, indent style and width. Every repo in the
-# org ships an .editorconfig and, until this gate, nothing enforced it —
-# the pre-commit whitespace hooks cover final newline and trailing space
-# but not indentation.
+# The gate covers charset, line endings, final newline, trailing
+# whitespace, indent style and width. Every repo in the org ships an
+# .editorconfig and, until this gate, nothing enforced it — the
+# pre-commit whitespace hooks cover final newline and trailing space but
+# not indentation.
 #
 # The Homebrew formula installs the binary as `editorconfig-checker` only;
 # the short `ec` alias upstream documents comes from the release tarballs,
@@ -431,18 +467,22 @@ lint-just:
 # (vendored code, Vale's synced styles, build output, the generated
 # changelog) comes from .editorconfig-checker.json rather than a CLI arg
 # list — that is the config filename editorconfig-checker v3 reads.
+
+# Check the tree against .editorconfig.
 lint-editorconfig:
     editorconfig-checker
 
-# Pre-validate a drafted commit message against the same gates the
-# commit-msg hook runs, so message problems surface while iterating
-# rather than at commit time. Reads the draft from the repo-root
-# COMMIT_AGENTMSG file (gitignored; see AGENTS.md for the workflow) and
-# runs the commit-msg stage through prek, which fires the four shared
-# hooks from proofhouse/pre-commit-hooks: commit-trailers, commitlint,
+# The recipe runs the same gates the commit-msg hook runs, so message
+# problems surface while iterating rather than at commit time. Reads the
+# draft from the repo-root COMMIT_AGENTMSG file (gitignored; see
+# AGENTS.md for the workflow) and runs the commit-msg stage through
+# prek, which fires the four shared hooks from
+# proofhouse/pre-commit-hooks: commit-trailers, commitlint,
 # vale-commit-msg, and cspell-commit-msg. The real gate stays the prek
 # commit-msg hook on .git/COMMIT_EDITMSG; this recipe only mirrors it.
 # Commit the validated draft with `git commit -F COMMIT_AGENTMSG`.
+
+# Pre-validate a drafted commit message.
 lint-commit-msg:
     prek run --stage commit-msg --commit-msg-filename COMMIT_AGENTMSG
 
@@ -457,15 +497,17 @@ lint-commit-msg:
 # recipe passes NO path args — tombi walks the tree per that config. This deliberately
 # departs from the sibling `*args`-default-`.` idiom because tombi centralizes scoping in
 # tombi.toml rather than on the CLI, keeping excludes in one place.
+
+# Lint and format-check every tracked TOML file.
 lint-toml:
     tombi format --check --diff
     tombi lint --offline --error-on-warnings
 
-# Warn when the locally installed tombi differs from the verified
-# release. Advisory rather than fatal: tombi comes from Homebrew and
-# moves on its own schedule, and that is fine so long as it stays
-# visible rather than silently reformatting a file the gate then
-# rejects.
+# Advisory rather than fatal: tombi comes from Homebrew and moves on its
+# own schedule, and that is fine so long as it stays visible rather than
+# silently reformatting a file the gate then rejects.
+
+# Warn when the local tombi differs from the verified release.
 [script]
 check-tombi-version:
     local=$(tombi --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
@@ -482,11 +524,12 @@ check-tombi-version:
 test *args:
     go test ./... "$@"
 
-# Run tests with race detector. Slower than plain `just test`; pairs
-# with goroutine-bearing code as it lands. Native fuzz targets discovered
-# by the nightly workflow rerun under `-race` automatically when their
-# function-under-test is reached from `-race` builds; for ad-hoc local
-# runs use this recipe.
+# Slower than plain `just test`; pairs with goroutine-bearing code as it
+# lands. Native fuzz targets discovered by the nightly workflow rerun
+# under `-race` automatically when their function-under-test is reached
+# from `-race` builds; for ad-hoc local runs use this recipe.
+
+# Run tests with the race detector.
 test-race:
     go test -race ./...
 
@@ -501,14 +544,14 @@ test-race:
 # directly to a recipe (the last value wins under pflag).
 gremlins_timeout_coefficient := env("GREMLINS_TIMEOUT_COEFFICIENT", "100")
 
-# Run mutation testing via gremlins. Gremlins mutates expressions in
-# the source under [path] (default the current directory), rebuilds
-# the package, and re-runs the tests against each mutation. Each
-# mutant comes back as KILLED (a test failed, meaning the test suite
-# caught the change), LIVED (no test failed, meaning the suite
-# missed the change), NOT COVERED (no test reaches the mutated line),
-# or NOT VIABLE (mutation broke the build). LIVED and NOT COVERED
-# mutants point at assertion gaps that line-coverage metrics miss.
+# Gremlins mutates expressions in the source under [path] (default the
+# current directory), rebuilds the package, and re-runs the tests
+# against each mutation. Each mutant comes back as KILLED (a test
+# failed, meaning the test suite caught the change), LIVED (no test
+# failed, meaning the suite missed the change), NOT COVERED (no test
+# reaches the mutated line), or NOT VIABLE (mutation broke the build).
+# LIVED and NOT COVERED mutants point at assertion gaps that
+# line-coverage metrics miss.
 #
 # This is the inner-loop form. Pass a sub-package path to scope the
 # run for fast iteration, the same way `go test` accepts a package
@@ -518,34 +561,40 @@ gremlins_timeout_coefficient := env("GREMLINS_TIMEOUT_COEFFICIENT", "100")
 #
 # Pinned as a `go tool` dep in go.mod so the mutator catalog is
 # reproducible across machines and bumps land as reviewable diffs.
+
+# Run mutation testing via gremlins.
 mutate *args:
     go tool gremlins unleash --timeout-coefficient {{ gremlins_timeout_coefficient }} {{ if args == "" { "." } else { args } }}
 
-# Mutate the whole module from the repository root. This is the
-# nightly form, factored out so the future `mutation-nightly.yml`
-# workflow has a single recipe to invoke and contributors can run
-# the same scan locally before opening a release-bound PR.
+# This is the nightly form, factored out so the future
+# `mutation-nightly.yml` workflow has a single recipe to invoke and
+# contributors can run the same scan locally before opening a
+# release-bound PR.
+
+# Mutate the whole module from the repository root.
 mutate-all:
     go tool gremlins unleash --timeout-coefficient {{ gremlins_timeout_coefficient }} .
 
-# Run native Go fuzz targets under [path] (default the entire module)
-# via tools/fuzz.sh. The script lists every Fuzz* function under each
-# package and runs it for the FUZZ_TIME budget (default 30s); set
-# FUZZ_TIME to widen the sweep, e.g. `FUZZ_TIME=5m just fuzz`. The
-# nightly workflow under `.github/workflows/` calls the same script
-# with a longer FUZZ_TIME, mirroring the gremlins / mutate-all shape
-# where one entry point powers both the inner loop and the scheduled
-# sweep.
+# [path] defaults to the entire module. The script lists every Fuzz*
+# function under each package and runs it for the FUZZ_TIME budget
+# (default 30s); set FUZZ_TIME to widen the sweep, e.g. `FUZZ_TIME=5m
+# just fuzz`. The nightly workflow under `.github/workflows/` calls the
+# same script with a longer FUZZ_TIME, mirroring the gremlins /
+# mutate-all shape where one entry point powers both the inner loop and
+# the scheduled sweep.
+
+# Run native Go fuzz targets under [path] via tools/fuzz.sh.
 fuzz path="./...":
     tools/fuzz.sh {{ path }}
 
-# Run tests with coverage, print the per-function breakdown, and
-# enforce the project thresholds documented in `.testcoverage.yml`.
-# This is the inner-loop coverage gate. Pair with `just mutate
-# <path>` when adding tests against survivor mutants. The total
-# threshold remains intentionally lower than today's measured
-# coverage so a contributor can land a feature with a few new
-# uncovered lines and tighten coverage in a follow-up.
+# The run prints the per-function breakdown and enforces the thresholds
+# documented in `.testcoverage.yml`. This is the inner-loop coverage
+# gate. Pair with `just mutate <path>` when adding tests against
+# survivor mutants. The total threshold remains intentionally lower than
+# today's measured coverage so a contributor can land a feature with a
+# few new uncovered lines and tighten coverage in a follow-up.
+
+# Run tests with coverage and enforce the project thresholds.
 cover:
     go test -coverprofile=coverage.out ./...
     @echo
@@ -553,28 +602,32 @@ cover:
     @echo
     go tool go-test-coverage --config .testcoverage.yml
 
-# Open the HTML coverage report. Highlights covered and uncovered
-# regions in source view so a contributor can find exactly where a
-# new test should land. Wraps `go tool cover -html`.
+# Highlights covered and uncovered regions in source view so a
+# contributor can find exactly where a new test should land. Wraps `go
+# tool cover -html`.
+
+# Open the HTML coverage report.
 cover-html:
     go test -coverprofile=coverage.out ./...
     go tool cover -html=coverage.out
 
-# Emit a Cobertura XML report from one local text profile. Cobertura is
-# the lingua franca format coverage dashboards accept. This is the quick
-# local form; CI's per-slot and combined uploads flow through
-# `cover-binary` and `cover-merge` below.
+# Cobertura is the lingua franca format coverage dashboards accept. This
+# is the quick local form; CI's per-slot and combined uploads flow
+# through `cover-binary` and `cover-merge` below.
+
+# Emit a Cobertura XML report from one local text profile.
 cover-cobertura:
     go test -coverprofile=coverage.out ./...
     go tool gocover-cobertura < coverage.out > coverage.xml
 
-# Run tests, writing binary coverage data into [covdir], then render
-# that run's Cobertura XML to coverage.xml. CI uploads the binary covdir
-# per matrix slot so the downstream coverage job can merge the slots with
-# `go tool covdata merge` (see `cover-merge`) into one combined report —
-# a merge only the binary format supports losslessly. The covdir is
-# absolute because `go test` runs each package's binary from that
-# package's directory, which would scatter a relative path.
+# CI uploads the binary covdir per matrix slot so the downstream
+# coverage job can merge the slots with `go tool covdata merge` (see
+# `cover-merge`) into one combined report — a merge only the binary
+# format supports losslessly. The covdir is absolute because `go test`
+# runs each package's binary from that package's directory, which would
+# scatter a relative path.
+
+# Run tests into [covdir] and render that run's Cobertura XML.
 cover-binary covdir="coverage.covdata":
     rm -rf "{{ justfile_directory() }}/{{ covdir }}"
     mkdir -p "{{ justfile_directory() }}/{{ covdir }}"
@@ -582,10 +635,12 @@ cover-binary covdir="coverage.covdata":
     go tool covdata textfmt -i="{{ justfile_directory() }}/{{ covdir }}" -o=coverage.out
     go tool gocover-cobertura < coverage.out > coverage.xml
 
-# Merge the per-slot binary coverage dirs under [slotsdir] (one
-# subdirectory per slot) into a single profile and render the combined
-# Cobertura XML to coverage.xml. CI runs this in the downstream coverage
-# job after collecting every slot's uploaded covdata.
+# [slotsdir] holds one subdirectory per slot. The merge produces a
+# single profile and renders the combined Cobertura XML to coverage.xml.
+# CI runs this in the downstream coverage job after collecting every
+# slot's uploaded covdata.
+
+# Merge the per-slot binary coverage dirs under [slotsdir].
 cover-merge slotsdir="coverage.covdata.slots":
     rm -rf coverage.covdata.merged
     mkdir -p coverage.covdata.merged
@@ -593,58 +648,66 @@ cover-merge slotsdir="coverage.covdata.slots":
     go tool covdata textfmt -i=coverage.covdata.merged -o=coverage.out
     go tool gocover-cobertura < coverage.out > coverage.xml
 
-# Run only the threshold gate against an existing coverage.out. The
-# bare check separates a CI step that runs tests itself from the
-# threshold enforcement, and gives a contributor a way to re-check
-# after editing `.testcoverage.yml` without rerunning the suite.
+# The bare check separates a CI step that runs tests itself from the
+# threshold enforcement, and gives a contributor a way to re-check after
+# editing `.testcoverage.yml` without rerunning the suite.
+
+# Run only the threshold gate against an existing coverage.out.
 cover-check:
     go tool go-test-coverage --config .testcoverage.yml
 
 # --- Security ---
 
-# Scan the module for known vulnerabilities reachable from the binary
-# entry points. govulncheck walks the call graph and reports only
-# vulnerabilities whose vulnerable symbols this module actually calls —
-# quieter than module-level scans and a closer match for what would
-# show up in production. Pinned as a `go tool` dep in go.mod so the
-# scanner version is reproducible across machines; bumped via Renovate.
+# Reachability starts at the binary entry points. govulncheck walks the
+# call graph and reports only vulnerabilities whose vulnerable symbols
+# this module actually calls — quieter than module-level scans and a
+# closer match for what would show up in production. Pinned as a `go
+# tool` dep in go.mod so the scanner version is reproducible across
+# machines; bumped via Renovate.
+
+# Scan the module for known reachable vulnerabilities.
 vuln:
     go tool govulncheck ./...
 
-# Emit the govulncheck results as SARIF to <file> for the security.yml
-# Code Scanning upload. govulncheck exits 0 in SARIF mode whether or not
-# it finds vulnerabilities — the report carries them — so this recipe
-# surfaces findings through Code Scanning rather than failing the run,
-# while a genuine scanner failure still exits non-zero.
+# The security.yml Code Scanning upload consumes the report.
+# govulncheck exits 0 in SARIF mode whether or not it finds
+# vulnerabilities — the report carries them — so this recipe surfaces
+# findings through Code Scanning rather than failing the run, while a
+# genuine scanner failure still exits non-zero.
+
+# Emit the govulncheck results as SARIF to <file>.
 vuln-sarif file:
     go tool govulncheck -format sarif ./... > "{{ file }}"
 
-# Scan the working tree and the full git history for committed
-# secrets via gitleaks. `gitleaks git` walks every commit's diff
-# against the bundled regular-expression and entropy rule set;
-# findings name the file, line, commit, and matching rule so the
-# offending change can be located without re-running the scan.
-# The scan runs from a digest-pinned image, so the rule set advances
-# only when Renovate bumps that pin. A later workflow under
-# `.github/workflows/` re-runs the same scan on every PR.
+# `gitleaks git` walks every commit's diff against the bundled
+# regular-expression and entropy rule set; findings name the file, line,
+# commit, and matching rule so the offending change can be located
+# without re-running the scan. The scan runs from a digest-pinned image,
+# so the rule set advances only when Renovate bumps that pin. A later
+# workflow under `.github/workflows/` re-runs the same scan on every PR.
+
+# Scan the tree and full git history for committed secrets.
 gitleaks:
     {{ gitleaks_scan }} git --verbose .
 
-# Scan each vendored module for supply-chain risk in one pass:
-# deprecated or retracted releases via the pkg.go.dev /v1beta API
-# (S2C2F SCA-3), and malicious packages via the OSV registry (S2C2F
+# Deprecated or retracted releases come from the pkg.go.dev /v1beta API
+# (S2C2F SCA-3), and malicious packages from the OSV registry (S2C2F
 # ING-3). gomodscan parses vendor/modules.txt for the enumerated
 # module set, queries both upstreams per entry, and reports any
 # retracted pin, deprecated module, or advisory whose ID starts with
 # MAL-. Exits 1 on findings, 2 on tool failure. Run `just vendor`
 # first when vendor/modules.txt is stale.
+
+# Scan each vendored module for supply-chain risk in one pass.
 scan:
     go run ./cmd/gomodscan
 
-# Emit the gomodscan findings as SARIF to <file> for the security.yml
-# Code Scanning upload. Unlike the scan gate recipe, a findings exit (1)
-# does not fail this recipe — Code Scanning surfaces severity downstream
-# — but a tool failure (exit 2) still propagates.
+# The security.yml Code Scanning upload consumes the report. Unlike the
+# scan gate recipe, a findings exit (1) does not fail this recipe — Code
+# Scanning surfaces severity downstream — but a tool failure (exit 2)
+# still propagates.
+
+# Emit the gomodscan findings as SARIF to <file>.
 scan-sarif file:
     #!/usr/bin/env bash
     set -uo pipefail
@@ -662,16 +725,19 @@ tidy:
 verify:
     go mod verify
 
-# Vendor dependencies into ./vendor. Vendoring makes new transitive
-# dependencies show up as a visible diff at PR review time, turning the
-# trust decision on each addition into a human one. The same pattern
-# Cilium uses for its open-source CI.
+# Vendoring makes new transitive dependencies show up as a visible diff
+# at PR review time, turning the trust decision on each addition into a
+# human one. The same pattern Cilium uses for its open-source CI.
+
+# Vendor dependencies into ./vendor.
 vendor:
     go mod tidy
     go mod vendor
 
-# Check that vendor/, go.mod, and go.sum are in sync. CI runs this on
-# every PR; contributors run `just vendor` and commit the result.
+# CI runs this on every PR; contributors run `just vendor` and commit
+# the result.
+
+# Check that vendor/, go.mod, and go.sum are in sync.
 vendor-check:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -690,23 +756,27 @@ vendor-check:
 # so any failure points at the actual gate that fired rather than
 # at the wrapper.
 
-# Fast quality bar for save-time and routine pre-push runs. tidy
-# normalizes go.mod / go.sum first so the rest of the gate sees the
-# canonical dependency set; vendor-check at the end catches any
-# drift the rest of the gate introduced.
+# tidy normalizes go.mod / go.sum first so the rest of the gate sees the
+# canonical dependency set; vendor-check at the end catches any drift
+# the rest of the gate introduced.
+
+# Run the fast quality bar for save-time and pre-push runs.
 check: tidy verify lint test vuln vendor-check
 
-# Comprehensive quality bar for release-prep sweeps. Layers the
-# race detector, the inner-loop fuzz sweep (30 seconds per target
-# by default; override via FUZZ_TIME), and the full-history
-# gitleaks scan on top of `check`. Slower than `check` by minutes
-# rather than seconds, so kept off the inner-loop path.
+# Layers the race detector, the inner-loop fuzz sweep (30 seconds per
+# target by default; override via FUZZ_TIME), and the full-history
+# gitleaks scan on top of `check`. Slower than `check` by minutes rather
+# than seconds, so kept off the inner-loop path.
+
+# Run the comprehensive quality bar for release-prep sweeps.
 check-all: check test-race fuzz gitleaks
 
 # Security-only sub-aggregator. Pairs govulncheck with the gomodscan
 # supply-chain scan and gitleaks so a future `security.yml` workflow
 # under `.github/workflows/` invokes one recipe rather than enumerate
 # the scanner set in YAML.
+
+# Run every security scanner in one pass.
 security: vuln scan gitleaks
 
 # --- Utilities ---
@@ -717,9 +787,10 @@ version:
     @echo "Commit:  {{ commit }}"
     @echo "Date:    {{ date }}"
 
-# Sync Vale styles and dictionaries. Run once after cloning the repo,
-# and whenever .vale.ini's Packages list changes. CI runs this before
-# `just lint-prose`.
+# Run once after cloning the repo, and whenever .vale.ini's Packages
+# list changes. CI runs this before `just lint-prose`.
+
+# Sync Vale styles and dictionaries.
 vale-sync:
     vale sync
 
@@ -727,38 +798,44 @@ vale-sync:
 prek:
     prek
 
-# Run pre-commit hooks on every file in the tree. Useful after a
-# hook config change or before a release sweep.
+# Useful after a hook config change or before a release sweep.
+
+# Run pre-commit hooks on every file in the tree.
 prek-all:
     prek run --all-files
 
-# Install the project's pre-commit hooks (commit-msg, pre-commit,
-# pre-push). `just setup` runs this automatically; it stays a separate
-# recipe so contributors can re-install the hooks (which modify .git/)
-# without re-running the whole setup.
+# The install covers the commit-msg, pre-commit, and pre-push stages.
+# `just setup` runs this automatically; it stays a separate recipe so
+# contributors can re-install the hooks (which modify .git/) without
+# re-running the whole setup.
+
+# Install the project's pre-commit hooks.
 prek-install:
     prek install -t commit-msg -t pre-commit -t pre-push
 
-# Generate the full CHANGELOG.md from Conventional Commit history.
 # `cog changelog` emits Markdown without an H1, so the pipeline prepends
 # one and writes the file before linting it in place: rumdl matches the
 # CHANGELOG.md per-file-ignores in .rumdl.toml (which disable MD024 for
 # the repeated version headings) against on-disk paths, not stdin.
+
+# Generate the full CHANGELOG.md from Conventional Commit history.
 generate-changelog:
     cog changelog | { echo "# Changelog"; cat; } > CHANGELOG.md
     rumdl check --fix CHANGELOG.md
 
-# Preview the changelog entries since the last tagged release. Useful
-# during release prep to see what `cog changelog` will emit before
-# committing the regeneration.
+# Useful during release prep to see what `cog changelog` will emit
+# before committing the regeneration.
+
+# Preview the changelog entries since the last tagged release.
 preview-changelog:
     cog changelog --at $(git describe --tags)..HEAD -t full_hash | rumdl check -d MD041 --fix --stdin
 
-# Generate release notes for a specific version (or for HEAD if no
-# version is given). Output goes to stdout; pipe to a file or paste
-# into the GitHub release body. MD041 is disabled for the heading-less
-# fragment; without --isolated, MD013 stays off via .rumdl.toml so the
-# full commit hashes are never wrapped.
+# Output goes to stdout; pipe to a file or paste into the GitHub release
+# body. MD041 is disabled for the heading-less fragment; without
+# --isolated, MD013 stays off via .rumdl.toml so the full commit hashes
+# are never wrapped.
+
+# Generate release notes for a version, or for HEAD by default.
 [script]
 generate-release-notes version="":
     v=$([[ -n "{{ version }}" ]] && echo "v{{ version }}" || echo "..$(git rev-parse HEAD)")
