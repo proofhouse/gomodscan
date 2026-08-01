@@ -57,8 +57,8 @@ const (
 // their own timing.
 //
 // ReturnLastFailure keeps retries transparent. Once the policy exhausts its
-// attempts and gives up, the transport returns the final response directly
-// rather than a retrypolicy.ExceededError wrapper, so a caller's status
+// attempts and gives up, the transport returns the final response (or error)
+// directly rather than a retrypolicy.ExceededError wrapper, so a caller's status
 // switch still maps a persistent 429 or 5xx onto its own unexpected-status
 // error.
 func NewTransport(
