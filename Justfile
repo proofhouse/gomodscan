@@ -29,10 +29,16 @@ golangci_lint_image := "docker.io/golangci/golangci-lint:v2.12.2@sha256:5cceeef0
 # well-known install locations so the recipe still works inside agentic
 # harnesses or sandboxes that strip /usr/local/bin from PATH. Override by
 # setting CONTAINER_RUNTIME in the environment.
+#
+# The continuation lines of the `for` list below hang under the first
+# candidate path rather than on a two-space grid, which is what shell
+# style calls for and what `lint-editorconfig` would otherwise reject
+# under this file's indent_size = 2. Exempt just that span rather than
+# re-indent a block the sibling repos carry verbatim.
+# editorconfig-checker-disable
 container_runtime := env("CONTAINER_RUNTIME", `bash -c '
     docker_path=$(command -v docker 2>/dev/null || true)
     podman_path=$(command -v podman 2>/dev/null || true)
-    # editorconfig-checker-disable
     for p in "$docker_path" \
              /usr/local/bin/docker \
              /opt/homebrew/bin/docker \
@@ -43,9 +49,10 @@ container_runtime := env("CONTAINER_RUNTIME", `bash -c '
              /opt/podman/bin/podman; do
         if [ -n "$p" ] && [ -x "$p" ]; then echo "$p"; exit 0; fi
     done
-    # editorconfig-checker-enable
     echo docker
 '`)
+
+# editorconfig-checker-enable
 
 # Container invocation prefix for golangci-lint. Mounts the working dir at
 # /data and the host Go module cache so first-run resolution stays cheap.
